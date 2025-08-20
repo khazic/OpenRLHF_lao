@@ -26,10 +26,10 @@ export MASTER_PORT=29500
 export WORLD_SIZE=16  
 export LOCAL_RANK=0   
 
-export MASTER_ADDR=$(head -n 1 hostfile.txt | awk '{print $1}')
+export MASTER_ADDR=$(head -n 1 /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/hostfile.txt | awk '{print $1}')
 echo "🚀 主节点IP (从hostfile.txt自动读取): $MASTER_ADDR"
 
-deepspeed --hostfile hostfile.txt \
+deepspeed --hostfile /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/hostfile.txt \
           --master_addr $MASTER_ADDR \
           --master_port 29500 \
           --module openrlhf.cli.train_sft \
