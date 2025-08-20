@@ -25,11 +25,12 @@ export WANDB_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:
 export WANDB_HTTP_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 export WANDB_HTTPS_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 
-# export NCCL_DEBUG=INFO
+export NCCL_DEBUG=ERROR  
+export NCCL_DEBUG_SUBSYS=NONE  
+
 export NCCL_IB_DISABLE=0
 export NCCL_IB_GID_INDEX=3
 export NCCL_SOCKET_IFNAME=eth0
-# export NCCL_DEBUG_SUBSYS=ALL
 export MASTER_PORT=29500
 export WORLD_SIZE=16  
 export LOCAL_RANK=0   

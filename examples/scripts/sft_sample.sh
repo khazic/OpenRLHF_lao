@@ -10,8 +10,12 @@ mkdir -p /xfr_ceph_sh/liuchonghan/hf_home
 mkdir -p /xfr_ceph_sh/liuchonghan/triton_cache
 mkdir -p /xfr_ceph_sh/liuchonghan/torch_home
 
-export CUDA_LAUNCH_BLOCKING=1
+export CUDA_LAUNCH_BLOCKING=0
 export TRANSFORMERS_NO_ADVISORY_WARNINGS=1
+
+export NCCL_DEBUG=ERROR  
+export NCCL_DEBUG_SUBSYS=NONE  
+
 export https_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 export http_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 export WANDB_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/

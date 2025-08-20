@@ -19,6 +19,7 @@ export NCCL_TIMEOUT=1800
 export NCCL_P2P_DISABLE=1
 export NCCL_SHM_DISABLE=0
 export NCCL_DEBUG=ERROR  
+export NCCL_DEBUG_SUBSYS=NONE 
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_rm \
