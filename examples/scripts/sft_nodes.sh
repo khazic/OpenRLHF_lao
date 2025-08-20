@@ -22,9 +22,9 @@ export WANDB_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:
 export WANDB_HTTP_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 export WANDB_HTTPS_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 
-# 多节点配置
+
 export MASTER_ADDR=$(head -n 1 /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/hostfile.txt | awk '{print $1}')
-export MASTER_PORT=29500
+export MASTER_PORT=29501
 export WORLD_SIZE=16
 export LOCAL_RANK=0
 
@@ -60,5 +60,6 @@ EOF
 deepspeed --hostfile /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/hostfile.txt \
           --master_addr $MASTER_ADDR \
           --master_port $MASTER_PORT \
+          --export https_proxy,http_proxy,WANDB_PROXY,WANDB_HTTP_PROXY,WANDB_HTTPS_PROXY \
           --module $training_commands 
 
