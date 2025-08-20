@@ -1,6 +1,6 @@
 #!/bin/bash
 set -x
-cd /xfr_ceph_sh/liuchonghan/OpenRLHF
+cd /xfr_ceph_sh/liuchonghan/OpenRLHF_lao
 export NCCL_DEBUG=INFO
 export NCCL_IB_DISABLE=0
 export NCCL_IB_GID_INDEX=3
@@ -27,7 +27,7 @@ sleep 10
 sshpass -p '1' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@${WORKER_IP} "
 source /xfr_ceph_sh/liuchonghan/envs/etc/profile.d/conda.sh
 conda activate openrlhf
-cd /xfr_ceph_sh/liuchonghan/OpenRLHF
+cd /xfr_ceph_sh/liuchonghan/OpenRLHF_lao
 
 export https_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 export http_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
@@ -46,4 +46,4 @@ ray start --address=${RAY_HEAD_IP}:6379 --num-cpus=96 --num-gpus=8
 
 sleep 10
 
-bash examples/scripts/rler_grpo.sh
+bash /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/rler_grpo.sh

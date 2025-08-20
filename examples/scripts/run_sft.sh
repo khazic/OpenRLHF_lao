@@ -47,4 +47,4 @@ echo "✅ 所有节点环境设置完成，开始执行SFT训练..."
 
 sleep 5
 
-bash examples/scripts/sft_nodes.sh
+bash /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/sft_nodes.sh
