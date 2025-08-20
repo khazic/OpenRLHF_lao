@@ -74,10 +74,6 @@ class SFTTrainer(ABC):
         self._tensorboard = None
         if self.strategy.args.use_wandb and self.strategy.is_rank_0():
             import wandb
-            import os
-            
-            os.environ['https_proxy'] = 'http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/'
-            os.environ['http_proxy'] = 'http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/'
 
             self._wandb = wandb
             if not wandb.api.api_key:
@@ -97,7 +93,7 @@ class SFTTrainer(ABC):
             wandb.define_metric("eval/*", step_metric="eval/global_step", step_sync=True)
 
         # Initialize TensorBoard writer if wandb is not available
-        if self.strategy.args.use_tensorboard and self._wandb is None:
+        if self.strategy.args.use_tensorboard and self._wandb is None and self.strategy.is_rank_0():
             from torch.utils.tensorboard import SummaryWriter
 
             os.makedirs(self.strategy.args.use_tensorboard, exist_ok=True)
@@ -182,9 +178,9 @@ class SFTTrainer(ABC):
 
             epoch_bar.update()
 
-        if self._wandb is not None:
+        if self._wandb is not None and self.strategy.is_rank_0():
             self._wandb.finish()
-        if self._tensorboard is not None:
+        if self._tensorboard is not None and self.strategy.is_rank_0():
             self._tensorboard.close()
 
     # logs/checkpoints/evaluation
@@ -248,10 +244,11 @@ class SFTTrainer(ABC):
                 logs = self.strategy.all_reduce(bar_dict)
                 step_bar.set_postfix(logs)
 
-            if self._wandb is not None:
-                logs = {"eval/%s" % k: v for k, v in {**logs, "global_step": steps}.items()}
-                self._wandb.log(logs)
-            elif self._tensorboard is not None:
-                for k, v in logs.items():
-                    self._tensorboard.add_scalar(f"eval/{k}", v, steps)
+            if self.strategy.is_rank_0():
+                if self._wandb is not None:
+                    logs = {"eval/%s" % k: v for k, v in {**logs, "global_step": steps}.items()}
+                    self._wandb.log(logs)
+                elif self._tensorboard is not None:
+                    for k, v in logs.items():
+                        self._tensorboard.add_scalar(f"eval/{k}", v, steps)
         self.model.train()  # reset model state

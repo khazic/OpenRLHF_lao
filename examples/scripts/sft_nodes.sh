@@ -19,18 +19,17 @@ export WANDB_CONNECT_TIMEOUT=120
 export WANDB_READ_TIMEOUT=300
 export WANDB_WRITE_TIMEOUT=300
 
-# 代理设置
 export https_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 export http_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 export WANDB_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 export WANDB_HTTP_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 export WANDB_HTTPS_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 
-export NCCL_DEBUG=INFO
+# export NCCL_DEBUG=INFO
 export NCCL_IB_DISABLE=0
 export NCCL_IB_GID_INDEX=3
 export NCCL_SOCKET_IFNAME=eth0
-export NCCL_DEBUG_SUBSYS=ALL
+# export NCCL_DEBUG_SUBSYS=ALL
 export MASTER_PORT=29500
 export WORLD_SIZE=16  
 export LOCAL_RANK=0   
@@ -61,7 +60,7 @@ deepspeed --hostfile /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/host
           --gradient_checkpointing \
           --packing_samples \
           --apply_chat_template \
-          --wandb_project "360_Repo" \
-          --wandb_run_name "Qwen2_5_sft_0820" \
+          --wandb_project 360_Repo \
+          --wandb_run_name Qwen2_5_sft_0820 \
           --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda 
 
