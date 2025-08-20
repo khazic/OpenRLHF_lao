@@ -72,7 +72,7 @@ class SFTTrainer(ABC):
         # wandb/tensorboard setting
         self._wandb = None
         self._tensorboard = None
-        if self.strategy.args.use_wandb and self.strategy.is_rank_0():
+        if self.strategy.args.use_wandb:
             import wandb
 
             self._wandb = wandb
@@ -93,7 +93,7 @@ class SFTTrainer(ABC):
             wandb.define_metric("eval/*", step_metric="eval/global_step", step_sync=True)
 
         # Initialize TensorBoard writer if wandb is not available
-        if self.strategy.args.use_tensorboard and self._wandb is None and self.strategy.is_rank_0():
+        if self.strategy.args.use_tensorboard and self._wandb is None:
             from torch.utils.tensorboard import SummaryWriter
 
             os.makedirs(self.strategy.args.use_tensorboard, exist_ok=True)
@@ -178,20 +178,20 @@ class SFTTrainer(ABC):
 
             epoch_bar.update()
 
-        if self._wandb is not None and self.strategy.is_rank_0():
+        if self._wandb is not None:
             self._wandb.finish()
-        if self._tensorboard is not None and self.strategy.is_rank_0():
+        if self._tensorboard is not None:
             self._tensorboard.close()
 
     # logs/checkpoints/evaluation
     def save_logs_and_checkpoints(self, args, global_step, step_bar, logs_dict={}, client_states={}):
         if global_step % args.logging_steps == 0:
             # wandb
-            if self._wandb is not None and self.strategy.is_rank_0():
+            if self._wandb is not None:
                 logs = {"train/%s" % k: v for k, v in {**logs_dict, "global_step": global_step}.items()}
                 self._wandb.log(logs)
             # TensorBoard
-            elif self._tensorboard is not None and self.strategy.is_rank_0():
+            elif self._tensorboard is not None:
                 for k, v in logs_dict.items():
                     self._tensorboard.add_scalar(f"train/{k}", v, global_step)
 
@@ -244,11 +244,10 @@ class SFTTrainer(ABC):
                 logs = self.strategy.all_reduce(bar_dict)
                 step_bar.set_postfix(logs)
 
-            if self.strategy.is_rank_0():
-                if self._wandb is not None:
-                    logs = {"eval/%s" % k: v for k, v in {**logs, "global_step": steps}.items()}
-                    self._wandb.log(logs)
-                elif self._tensorboard is not None:
-                    for k, v in logs.items():
-                        self._tensorboard.add_scalar(f"eval/{k}", v, steps)
+            if self._wandb is not None:
+                logs = {"eval/%s" % k: v for k, v in {**logs, "global_step": steps}.items()}
+                self._wandb.log(logs)
+            elif self._tensorboard is not None:
+                for k, v in logs.items():
+                    self._tensorboard.add_scalar(f"eval/{k}", v, steps)
         self.model.train()  # reset model state
