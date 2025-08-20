@@ -16,12 +16,12 @@ export TRANSFORMERS_NO_ADVISORY_WARNINGS=1
 export NCCL_DEBUG=ERROR  
 export NCCL_DEBUG_SUBSYS=NONE  
 
-export https_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
-export http_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
-export WANDB_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
-export WANDB_HTTP_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
-export WANDB_HTTPS_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
-
+# 注释掉代理设置，因为会通过 .deepspeed_env 文件自动设置
+# export https_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
+# export http_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
+# export WANDB_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
+# export WANDB_HTTP_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
+# export WANDB_HTTPS_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 
 export MASTER_ADDR=$(head -n 1 /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/hostfile.txt | awk '{print $1}')
 export MASTER_PORT=29501
@@ -29,7 +29,6 @@ export WORLD_SIZE=16
 export LOCAL_RANK=0
 
 echo "🚀 主节点IP (从hostfile.txt自动读取): $MASTER_ADDR"
-
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
@@ -60,6 +59,5 @@ EOF
 deepspeed --hostfile /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/hostfile.txt \
           --master_addr $MASTER_ADDR \
           --master_port $MASTER_PORT \
-          --export https_proxy,http_proxy,WANDB_PROXY,WANDB_HTTP_PROXY,WANDB_HTTPS_PROXY \
           --module $training_commands 
 
