@@ -18,6 +18,7 @@ export NCCL_SOCKET_IFNAME=eth0
 export NCCL_TIMEOUT=1800
 export NCCL_P2P_DISABLE=1
 export NCCL_SHM_DISABLE=0
+export NCCL_DEBUG=ERROR  
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_rm \
@@ -40,14 +41,13 @@ openrlhf.cli.train_rm \
    --packing_samples \
    --gradient_checkpointing \
    --value_head_prefix score \
-   --no_shuffle \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo \
    --wandb_run_name reward_model
 EOF
 
 if [[ ${1} != "slurm" ]]; then
-    deepspeed --master_addr localhost --master_port 29500 \
+    NCCL_DEBUG=ERROR deepspeed --master_addr localhost --master_port 29500 \
               --include localhost:0,1,2,3,4,5,6,7 \
               --module $training_commands
 fi
