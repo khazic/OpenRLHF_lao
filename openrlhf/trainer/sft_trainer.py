@@ -72,8 +72,12 @@ class SFTTrainer(ABC):
         # wandb/tensorboard setting
         self._wandb = None
         self._tensorboard = None
-        if self.strategy.args.use_wandb:
+        if self.strategy.args.use_wandb and self.strategy.is_rank_0():
             import wandb
+            import os
+            
+            os.environ['https_proxy'] = 'http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/'
+            os.environ['http_proxy'] = 'http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/'
 
             self._wandb = wandb
             if not wandb.api.api_key:
@@ -187,11 +191,11 @@ class SFTTrainer(ABC):
     def save_logs_and_checkpoints(self, args, global_step, step_bar, logs_dict={}, client_states={}):
         if global_step % args.logging_steps == 0:
             # wandb
-            if self._wandb is not None:
+            if self._wandb is not None and self.strategy.is_rank_0():
                 logs = {"train/%s" % k: v for k, v in {**logs_dict, "global_step": global_step}.items()}
                 self._wandb.log(logs)
             # TensorBoard
-            elif self._tensorboard is not None:
+            elif self._tensorboard is not None and self.strategy.is_rank_0():
                 for k, v in logs_dict.items():
                     self._tensorboard.add_scalar(f"train/{k}", v, global_step)
 
