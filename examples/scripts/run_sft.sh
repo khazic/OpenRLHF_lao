@@ -26,7 +26,7 @@ mkdir -p /xfr_ceph_sh/liuchonghan/torch_home
 
 echo "🚀 开始在工作节点设置代理..."
 
-ssh -i /xfr_ceph_sh/liuchonghan/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@${WORKER_IP} "
+sshpass -p '1' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@${WORKER_IP} "
 source /xfr_ceph_sh/liuchonghan/envs/etc/profile.d/conda.sh
 conda activate openrlhf
 cd /xfr_ceph_sh/liuchonghan/OpenRLHF_lao
