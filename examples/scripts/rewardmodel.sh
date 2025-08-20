@@ -43,7 +43,7 @@ openrlhf.cli.train_rm \
    --no_shuffle \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo \
-   --wandb_run_name rm-1
+   --wandb_run_name reward_model
 EOF
 
 if [[ ${1} != "slurm" ]]; then

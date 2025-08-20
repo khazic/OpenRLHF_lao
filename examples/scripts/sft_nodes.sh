@@ -13,7 +13,9 @@ mkdir -p /xfr_ceph_sh/liuchonghan/torch_home
 export CUDA_LAUNCH_BLOCKING=1
 export TRANSFORMERS_NO_ADVISORY_WARNINGS=1
 export WANDB_API_KEY="9c69c18b00c7dac67189f39e261a257ebd476cda"
-export WANDB_MODE=offline
+
+export https_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
+export http_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 
 export NCCL_DEBUG=INFO
 export NCCL_IB_DISABLE=0
