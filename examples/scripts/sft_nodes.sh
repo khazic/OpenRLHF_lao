@@ -33,6 +33,7 @@ echo "🚀 主节点IP (从hostfile.txt自动读取): $MASTER_ADDR"
 deepspeed --hostfile hostfile.txt \
           --master_addr $MASTER_ADDR \
           --master_port 29500 \
+          --ssh_args="-i /xfr_ceph_sh/liuchonghan/.ssh/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
           --module openrlhf.cli.train_sft \
           --max_len 4096 \
           --dataset /xfr_ceph_sh/liuchonghan/sft_dataset \
