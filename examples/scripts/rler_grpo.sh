@@ -32,15 +32,15 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --save_path ./checkpoint/qwen2_5_rler_grpo_main \
    --ckpt_path ./checkpoint/qwen2_5_rler_grpo_ckpt \
    --save_hf_ckpt \
-   --micro_train_batch_size 8 \
-   --train_batch_size 128 \
-   --micro_rollout_batch_size 16 \
    --rollout_batch_size 128 \
    --n_samples_per_prompt 8 \
+   --train_batch_size 128 \
+   --micro_train_batch_size 8 \
+   --micro_rollout_batch_size 16 \
    --max_epochs 1 \
-   --prompt_max_len 1024 \
+   --prompt_max_len 4096 \
    --max_samples 100000 \
-   --generate_max_len 1024 \
+   --generate_max_len 4096 \
    --zero_stage 3 \
    --bf16 \
    --actor_learning_rate 5e-7 \

@@ -1,4 +1,4 @@
-cd /xfr_ceph_sh/liuchonghan/OpenRLHF
+cd /xfr_ceph_sh/liuchonghan/OpenRLHF_lao
 export NCCL_DEBUG=INFO
 export NCCL_IB_DISABLE=0
 export NCCL_IB_GID_INDEX=3
@@ -11,7 +11,7 @@ ray start --head --port=6379 --num-cpus=96 --num-gpus=8 --temp-dir=/tmp/ray --da
 
 
 
-cd /xfr_ceph_sh/liuchonghan/OpenRLHF
+cd /xfr_ceph_sh/liuchonghan/OpenRLHF_lao
 source /xfr_ceph_sh/liuchonghan/envs/etc/profile.d/conda.sh
 conda activate openrlhf
 export https_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
