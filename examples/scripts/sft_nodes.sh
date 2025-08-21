@@ -16,19 +16,12 @@ export TRANSFORMERS_NO_ADVISORY_WARNINGS=1
 export NCCL_DEBUG=ERROR  
 export NCCL_DEBUG_SUBSYS=NONE  
 
-# 注释掉代理设置，因为会通过 .deepspeed_env 文件自动设置
-# export https_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
-# export http_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
-# export WANDB_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
-# export WANDB_HTTP_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
-# export WANDB_HTTPS_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
-
 export MASTER_ADDR=$(head -n 1 /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/hostfile.txt | awk '{print $1}')
 export MASTER_PORT=29501
 export WORLD_SIZE=16
 export LOCAL_RANK=0
 
-echo "🚀 主节点IP (从hostfile.txt自动读取): $MASTER_ADDR"
+echo "🚀 Master node IP (auto-read from hostfile.txt): $MASTER_ADDR"
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
@@ -36,8 +29,8 @@ openrlhf.cli.train_sft \
    --dataset /xfr_ceph_sh/liuchonghan/sft_dataset \
    --input_key question \
    --output_key response \
-   --train_batch_size 4096 \
-   --micro_train_batch_size 1 \
+   --train_batch_size 8192 \
+   --micro_train_batch_size 2 \
    --max_samples 9000000 \
    --pretrain /llm-align/duyimin/duyimin/open_modle/Qwen2.5-7B-8Langs-CPT-250819 \
    --save_path ./checkpoint/Qwen2_5_sft_0820 \

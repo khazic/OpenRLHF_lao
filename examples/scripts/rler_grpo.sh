@@ -1,7 +1,7 @@
 set -x
 
 if [ "$CONDA_DEFAULT_ENV" != "openrlhf" ]; then
-    echo "警告: conda 环境不是 openrlhf，当前环境: $CONDA_DEFAULT_ENV"
+    echo "Warning: conda environment is not openrlhf, current environment: $CONDA_DEFAULT_ENV"
     source /xfr_ceph_sh/liuchonghan/envs/etc/profile.d/conda.sh
     conda activate openrlhf
 fi
@@ -9,7 +9,7 @@ fi
 export PYTHONPATH=/xfr_ceph_sh/liuchonghan/OpenRLHF:$PYTHONPATH
 
 if ! python3 -c "import ray" 2>/dev/null; then
-    echo "安装 Ray..."
+    echo "Installing Ray..."
 fi
 python3 -m openrlhf.cli.train_ppo_ray \
    --ref_num_nodes 2 \
