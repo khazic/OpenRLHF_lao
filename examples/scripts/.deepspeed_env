@@ -3,7 +3,3 @@ http_proxy=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 WANDB_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 WANDB_HTTP_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
 WANDB_HTTPS_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qihoo.net:8000/
-
-export DS_SSH_PASSWORD=1
-export DS_SSH_PASSWORD_AUTH=true
-export DS_SSH_OPTS="-o PasswordAuthentication=yes -o PubkeyAuthentication=no"
