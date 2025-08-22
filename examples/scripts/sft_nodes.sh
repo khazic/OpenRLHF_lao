@@ -49,6 +49,10 @@ openrlhf.cli.train_sft \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda
 EOF
 
+export DS_SSH_PASSWORD=1
+export DS_SSH_PASSWORD_AUTH=true
+export DS_SSH_OPTS="-o PasswordAuthentication=yes -o PubkeyAuthentication=no"
+
 deepspeed --hostfile /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/hostfile.txt \
           --master_addr $MASTER_ADDR \
           --master_port $MASTER_PORT \
