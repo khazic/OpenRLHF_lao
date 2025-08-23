@@ -53,7 +53,17 @@ for host in $(awk '{print $1}' hostfile.txt); do
     fi
 done
 
-# 训练命令
+current_ip=$(hostname -i)
+node_rank=0
+while read -r ip _; do
+    if [ "$ip" = "$current_ip" ]; then
+        break
+    fi
+    ((node_rank++))
+done < hostfile.txt
+
+echo "Current node rank: $node_rank"
+
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 4096 \
@@ -80,12 +90,12 @@ openrlhf.cli.train_sft \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda
 EOF
 
-# 启动训练
 deepspeed --hostfile hostfile.txt \
           --master_addr $MASTER_ADDR \
           --master_port $MASTER_PORT \
           --no_local_rank \
           --force_multi \
           --no_ssh \
+          --node_rank $node_rank \
           --module $training_commands 
 
