@@ -50,7 +50,6 @@ openrlhf.cli.train_sft \
    --learning_rate 5e-6 \
    --gradient_checkpointing \
    --packing_samples \
-   --apply_chat_template \
    --wandb_project 360_Repo \
    --wandb_run_name Qwen2_5_sft_0823 \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda
