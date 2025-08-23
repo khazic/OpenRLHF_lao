@@ -27,7 +27,6 @@ read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 4096 \
    --dataset /xfr_ceph_sh/liuchonghan/test_dataset \
-   --dataset_type processed \
    --train_batch_size 8192 \
    --micro_train_batch_size 2 \
    --max_samples 10000000 \
