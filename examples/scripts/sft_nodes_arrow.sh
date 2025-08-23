@@ -1,5 +1,12 @@
-# -*- coding: utf-8 -*-
+#!/bin/bash
 set -x
+
+export TORCH_EXTENSIONS_DIR="/tmp/torch_extensions_$(date +%s)"
+export MAX_JOBS=4
+export TORCH_CUDA_ARCH_LIST="8.0"
+
+export DS_BUILD_FUSED_ADAM=0
+export DS_BUILD_OPS=0
 
 export TRANSFORMERS_CACHE="/xfr_ceph_sh/liuchonghan/hf_cache"
 export HF_HOME="/xfr_ceph_sh/liuchonghan/hf_home"
