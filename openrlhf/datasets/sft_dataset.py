@@ -184,11 +184,19 @@ class SFTDataset(Dataset):
 
     def __getitem__(self, idx):
         if getattr(self, "use_arrow", False):
-            return (
-                torch.tensor(self.input_ids[idx]),
-                torch.tensor(self.attention_mask[idx]),
-                torch.tensor(self.loss_mask[idx])
-            )
+            input_ids = torch.tensor(self.input_ids[idx])
+            attention_mask = torch.tensor(self.attention_mask[idx])
+            loss_mask = torch.tensor(self.loss_mask[idx])
+
+            # 确保维度正确：[seq_len] -> [1, seq_len]
+            if input_ids.dim() == 1:
+                input_ids = input_ids.unsqueeze(0)
+            if attention_mask.dim() == 1:
+                attention_mask = attention_mask.unsqueeze(0)
+            if loss_mask.dim() == 1:
+                loss_mask = loss_mask.unsqueeze(0)
+
+            return input_ids, attention_mask, loss_mask
         else:
             # 原有的文本处理逻辑
             prompt = self.prompts[idx]
