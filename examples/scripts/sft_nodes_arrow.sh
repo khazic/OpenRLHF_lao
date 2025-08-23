@@ -15,9 +15,11 @@ export TRANSFORMERS_NO_ADVISORY_WARNINGS=1
 
 export NCCL_DEBUG=ERROR  
 export NCCL_DEBUG_SUBSYS=NONE  
-
+export NCCL_IB_DISABLE=1
+export NCCL_P2P_DISABLE=1
+export NCCL_SOCKET_IFNAME=eth0
 export MASTER_ADDR=$(head -n 1 /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/hostfile.txt | awk '{print $1}')
-export MASTER_PORT=29501
+export MASTER_PORT=12345
 export WORLD_SIZE=16
 export LOCAL_RANK=0
 
