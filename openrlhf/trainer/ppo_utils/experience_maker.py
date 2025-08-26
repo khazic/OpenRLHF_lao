@@ -712,7 +712,7 @@ class RemoteExperienceMaker(ABC):
             for experience, group_reward_std in zip(experiences, group_reward_stds):
                 experience.info["group_reward_std"] = group_reward_std
 
-        # reward shaping
+        # reward reshaping
         if args.advantage_estimator == "rloo":
             baseline = (rewards.sum(-1, keepdim=True) - rewards) / (args.n_samples_per_prompt - 1)
             rewards = rewards - baseline
@@ -722,6 +722,12 @@ class RemoteExperienceMaker(ABC):
             rewards = rewards - rewards.mean(-1, keepdim=True)
         elif args.advantage_estimator == "group_norm":
             rewards = (rewards - rewards.mean(-1, keepdim=True)) / (rewards.std(-1, keepdim=True) + 1e-9)
+        elif args.advantage_estimator == "xpo":
+            # xPO: 减去group的平均值除以batch内的方差
+            # 这里使用整个batch的方差，而不是单个group的方差
+            batch_mean = rewards.mean()
+            batch_std = rewards.std() + 1e-9
+            rewards = (rewards - rewards.mean(-1, keepdim=True)) / batch_std
 
         rewards = rewards.reshape(-1)[indices].split(exp_len)
 

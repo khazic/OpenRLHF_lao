@@ -360,7 +360,7 @@ class BasePPOTrainer(ABC):
 @ray.remote
 class PPOTrainer(BasePPOTrainer):
     """
-    Trainer for Proximal Policy Optimization (PPO) / REINFORCE++ / GRPO / RLOO and their variants.
+    Trainer for Proximal Policy Optimization (PPO) / REINFORCE++ / GRPO / RLOO / xPO and their variants.
     Single Controller with Multiple ActorGroups
     """
 

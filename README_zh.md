@@ -303,8 +303,10 @@ ray job submit --address="http://127.0.0.1:8265" \
   --deepspeed_enable_sleep \
   --use_wandb {wandb_token}
 
-# 支持 REINFORCE++  | RLOO | REINFORCE++-baseline | GRPO | Dr. GRPO
-# --advantage_estimator reinforce | rloo | reinforce_baseline | group_norm | dr_grpo
+# 支持 REINFORCE++  | RLOO | REINFORCE++-baseline | GRPO | Dr. GRPO | xPO
+# --advantage_estimator reinforce | rloo | reinforce_baseline | group_norm | dr_grpo | xpo
+
+# xPO: 基于GRPO的改进版本，使用batch级别的方差归一化来稳定训练
 
 # 设置 --init_kl_coef 为 0 将不会启动参考模型
 
