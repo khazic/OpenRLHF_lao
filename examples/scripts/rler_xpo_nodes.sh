@@ -24,18 +24,17 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --vllm_gpu_memory_utilization 0.6 \
    --init_kl_coef 1e-3 \
    --colocate_all_models \
-   --use_kl_loss \
    --advantage_estimator xpo \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
    --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_Qwen_0825_translate \
-   --save_path ./checkpoint/RLer_xpo_0826 \
-   --ckpt_path ./checkpoint/RLer_xpo_0826_ckpt \
+   --save_path ./checkpoint/RLer_xpo_0826_batchstd_nokl \
+   --ckpt_path ./checkpoint/RLer_xpo_0826_batchstd_nokl_ckpt \
    --save_hf_ckpt \
-   --rollout_batch_size 64 \
-   --n_samples_per_prompt 8 \
-   --train_batch_size 64 \
-   --micro_train_batch_size 2 \
-   --micro_rollout_batch_size 4 \
+   --rollout_batch_size 128 \
+   --n_samples_per_prompt 16 \
+   --train_batch_size 128 \
+   --micro_train_batch_size 16 \
+   --micro_rollout_batch_size 8 \
    --max_epochs 1 \
    --prompt_max_len 4096 \
    --max_samples 100000 \
@@ -55,10 +54,12 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --deepspeed_enable_sleep \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo \
-   --wandb_run_name RLer_xpo_0826_nodes_std
+   --wandb_run_name RLer_xpo_0826_nodes_batchstd_nokl \
+   --kl_estimator k2 \
+   --use_kl_loss \
+   --eps_clip_low_high 0.15 0.25 \
+   --entropy_loss_coef 0.005 
 
-#    --kl_estimator k2 \
-#    --entropy_loss_coef 0.01 \
-#    --eps_clip_low_high 0.15 0.25 \
 #    --overlong_penalty_factor 0.5 \
 #    --overlong_buffer_len 256 \
+
