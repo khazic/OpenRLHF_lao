@@ -68,11 +68,11 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --save_path ./checkpoint/RLer_xpo_0826 \
    --ckpt_path ./checkpoint/RLer_xpo_0826_ckpt \
    --save_hf_ckpt \
-   --rollout_batch_size 64 \
+   --rollout_batch_size 32 \
    --n_samples_per_prompt 8 \
-   --train_batch_size 64 \
-   --micro_train_batch_size 8 \
-   --micro_rollout_batch_size 8 \
+   --train_batch_size 32 \
+   --micro_train_batch_size 4 \
+   --micro_rollout_batch_size 4 \
    --max_epochs 1 \
    --prompt_max_len 8192 \
    --max_samples 500000 \
