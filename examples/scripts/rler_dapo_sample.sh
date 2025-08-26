@@ -15,6 +15,8 @@ fi
 python3 -m openrlhf.cli.train_ppo_ray \
    --ref_num_nodes 1 \
    --ref_num_gpus_per_node 8 \
+   --reward_num_nodes 1 \
+   --reward_num_gpus_per_node 8 \
    --actor_num_nodes 1 \
    --actor_num_gpus_per_node 8 \
    --vllm_num_engines 2 \
@@ -30,7 +32,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --dynamic_filtering_reward_range -5 5 \
    --eps_clip_low_high 0.2 0.3 \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
-   --remote_rm_url /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/python/reward_func.py \
+   --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_Qwen_0825_translate \
    --save_path ./checkpoint/RLer_Dapo_sample_0826 \
    --ckpt_path ./checkpoint/RLer_Dapo_sample_0826_ckpt \
    --save_hf_ckpt \
