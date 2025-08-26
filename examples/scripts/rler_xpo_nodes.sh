@@ -21,7 +21,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --actor_num_gpus_per_node 8 \
    --vllm_num_engines 4 \
    --vllm_tensor_parallel_size 4 \
-   --vllm_gpu_memory_utilization 0.6 \
+   --vllm_gpu_memory_utilization 0.4 \
    --init_kl_coef 5e-3 \
    --gamma 1.0 \
    --colocate_all_models \
@@ -37,11 +37,11 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --save_path ./checkpoint/RLer_xpo_0826 \
    --ckpt_path ./checkpoint/RLer_xpo_0826_ckpt \
    --save_hf_ckpt \
-   --rollout_batch_size 128 \
+   --rollout_batch_size 64 \
    --n_samples_per_prompt 8 \
-   --train_batch_size 128 \
-   --micro_train_batch_size 8 \
-   --micro_rollout_batch_size 16 \
+   --train_batch_size 64 \
+   --micro_train_batch_size 4 \
+   --micro_rollout_batch_size 8 \
    --max_epochs 1 \
    --prompt_max_len 4096 \
    --max_samples 500000 \
