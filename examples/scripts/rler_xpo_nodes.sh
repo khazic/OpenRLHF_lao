@@ -19,7 +19,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --reward_num_gpus_per_node 8 \
    --actor_num_nodes 2 \
    --actor_num_gpus_per_node 8 \
-   --vllm_num_engines 2 \
+   --vllm_num_engines 4 \
    --vllm_tensor_parallel_size 4 \
    --vllm_gpu_memory_utilization 0.6 \
    --init_kl_coef 5e-3 \
@@ -43,9 +43,9 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --micro_train_batch_size 8 \
    --micro_rollout_batch_size 16 \
    --max_epochs 1 \
-   --prompt_max_len 8192 \
+   --prompt_max_len 4096 \
    --max_samples 500000 \
-   --generate_max_len 8192 \
+   --generate_max_len 4096 \
    --zero_stage 3 \
    --bf16 \
    --actor_learning_rate 5e-7 \
