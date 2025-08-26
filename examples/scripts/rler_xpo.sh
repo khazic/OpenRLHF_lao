@@ -32,6 +32,16 @@ fi
 #    - Builds larger reward signals for exploration
 #    - Prevents premature policy convergence, enhances policy diversity
 #    - Balances the stability brought by xPO's batch variance normalization
+#
+# 5. PPO clip range: Added custom clip range
+#    - Set eps_clip_low_high to 0.15 0.25 for more controlled policy updates
+#    - Provides asymmetric clipping for better exploration-exploitation balance
+#
+# 6. Length penalty mechanism: Added overlong sequence penalty
+#    - overlong_buffer_len: 256 tokens as length threshold
+#    - overlong_penalty_factor: 1.0 penalty per excess token
+#    - Encourages concise and focused responses
+
 
 python3 -m openrlhf.cli.train_ppo_ray \
    --ref_num_nodes 1 \
