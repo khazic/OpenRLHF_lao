@@ -28,8 +28,6 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --use_kl_loss \
    --kl_estimator k2 \
    --advantage_estimator group_norm \
-   --dynamic_filtering \
-   --dynamic_filtering_reward_range -5 5 \
    --eps_clip_low_high 0.2 0.3 \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
    --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_Qwen_0825_translate \
