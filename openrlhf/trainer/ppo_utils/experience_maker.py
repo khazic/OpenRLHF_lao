@@ -749,14 +749,15 @@ class RemoteExperienceMaker(ABC):
                     args.gamma,
                     args.lambd,
                 )
-            elif self.advantage_estimator in ["reinforce", "rloo", "reinforce_baseline", "group_norm", "dr_grpo"]:
+            elif self.advantage_estimator in ["reinforce", "rloo", "reinforce_baseline", "group_norm", "dr_grpo", "xpo"]:
                 if args.gamma != 1.0 and self.advantage_estimator in [
                     "rloo",
-                    "reinforce_baseline",
+                    "reinforce_baseline", 
                     "group_norm",
                     "dr_grpo",
+                    "xpo",
                 ]:
-                    logger.warning("gamma is set to 1.0 for rloo, reinforce_baseline, and group_norm")
+                    logger.warning("gamma is set to 1.0 for rloo, reinforce_baseline, group_norm, dr_grpo, and xpo")
                     args.gamma = 1.0
 
                 experience.returns = self.get_cumulative_returns(
