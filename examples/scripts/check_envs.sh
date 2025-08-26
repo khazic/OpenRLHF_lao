@@ -29,7 +29,7 @@ ray start --address=11.131.250.118:6379 --num-cpus=96 --num-gpus=8
 
 
 ray status
-bash examples/scripts/rler_grpo.sh
+bash examples/scripts/rler_grpo_nodes.sh
 
 
 ray status
