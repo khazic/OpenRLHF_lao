@@ -23,7 +23,6 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --vllm_tensor_parallel_size 4 \
    --vllm_gpu_memory_utilization 0.4 \
    --init_kl_coef 5e-3 \
-   --gamma 1.0 \
    --colocate_all_models \
    --eps_clip_low_high 0.15 0.25 \
    --use_kl_loss \
@@ -40,8 +39,8 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --rollout_batch_size 64 \
    --n_samples_per_prompt 8 \
    --train_batch_size 64 \
-   --micro_train_batch_size 4 \
-   --micro_rollout_batch_size 8 \
+   --micro_train_batch_size 2 \
+   --micro_rollout_batch_size 4 \
    --max_epochs 1 \
    --prompt_max_len 4096 \
    --max_samples 500000 \
