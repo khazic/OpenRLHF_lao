@@ -723,11 +723,11 @@ class RemoteExperienceMaker(ABC):
         elif args.advantage_estimator == "group_norm":
             rewards = (rewards - rewards.mean(-1, keepdim=True)) / (rewards.std(-1, keepdim=True) + 1e-9)
         elif args.advantage_estimator == "xpo":
-            # xPO: 减去group的平均值除以batch内的方差
-            # 这里使用整个batch的方差，而不是单个group的方差
-            batch_mean = rewards.mean()
+            # xPO: (rewards - group_mean) / batch_std
+            # Use batch-level variance instead of group-level variance for more stable normalization
+            group_means = rewards.mean(-1, keepdim=True)
             batch_std = rewards.std() + 1e-9
-            rewards = (rewards - rewards.mean(-1, keepdim=True)) / batch_std
+            rewards = (rewards - group_means) / batch_std
 
         rewards = rewards.reshape(-1)[indices].split(exp_len)
 
