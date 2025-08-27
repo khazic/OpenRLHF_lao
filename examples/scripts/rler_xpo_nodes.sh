@@ -26,8 +26,8 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --advantage_estimator xpo \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
    --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_Qwen_0825_translate \
-   --save_path ./checkpoint/RLer_xpo_0826_batchstd_nokl_noentropy_noesp \
-   --ckpt_path ./checkpoint/RLer_xpo_0826_batchstd_nokl_noentropy_noesp_ckpt \
+   --save_path ./checkpoint/RLer_xpo_0827_batchstd_nokl_noentropy_noesp_2 \
+   --ckpt_path ./checkpoint/RLer_xpo_0827_batchstd_nokl_noentropy_noesp_2_ckpt \
    --save_hf_ckpt \
    --rollout_batch_size 128 \
    --n_samples_per_prompt 16 \
@@ -40,7 +40,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --generate_max_len 4096 \
    --zero_stage 3 \
    --bf16 \
-   --actor_learning_rate 5e-7 \
+   --actor_learning_rate 1e-6 \
    --init_kl_coef 0.0 \
    --prompt_data /xfr_ceph_sh/liuchonghan/prompt_dataset \
    --input_key context_messages \
@@ -54,7 +54,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --deepspeed_enable_sleep \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo \
-   --wandb_run_name RLer_xpo_0826_nodes_batchstd_nokl_noentropy_noesp
+   --wandb_run_name RLer_xpo_0827_nodes_batchstd_nokl_noentropy_noesp_2
 
 
 #    --overlong_penalty_factor 0.5 \
