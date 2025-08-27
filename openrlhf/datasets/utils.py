@@ -124,6 +124,59 @@ def _validate_reward_data_structure(data):
     return True  # 允许没有prompt字段的数据
 
 
+def load_directory_with_error_handling(directory_path, strategy):
+    """
+    加载目录中的数据集，对JSON文件使用错误处理
+    """
+    strategy.print(f"扫描目录中的数据文件: {directory_path}")
+    
+    # 查找目录中的数据文件
+    json_files = []
+    other_files = []
+    
+    for file_name in os.listdir(directory_path):
+        file_path = os.path.join(directory_path, file_name)
+        if os.path.isfile(file_path):
+            ext = os.path.splitext(file_name)[-1].lower()
+            if ext in ['.json', '.jsonl']:
+                json_files.append(file_path)
+            elif ext in ['.csv', '.parquet', '.arrow']:
+                other_files.append(file_path)
+    
+    datasets_to_concat = []
+    
+    # 处理JSON文件
+    for json_file in json_files:
+        try:
+            strategy.print(f"处理JSON文件: {json_file}")
+            data = load_json_with_error_handling(json_file, strategy)
+            datasets_to_concat.append(data)
+        except Exception as e:
+            strategy.print(f"跳过损坏的JSON文件 {json_file}: {str(e)}")
+            continue
+    
+    # 处理其他格式文件
+    for other_file in other_files:
+        try:
+            ext = os.path.splitext(other_file)[-1].lower().strip('.')
+            strategy.print(f"处理{ext.upper()}文件: {other_file}")
+            data = load_dataset(ext, data_files=other_file)['train']
+            datasets_to_concat.append(data)
+        except Exception as e:
+            strategy.print(f"跳过损坏的文件 {other_file}: {str(e)}")
+            continue
+    
+    if not datasets_to_concat:
+        raise ValueError(f"目录 {directory_path} 中没有找到可用的数据文件")
+    
+    # 合并所有数据集
+    if len(datasets_to_concat) == 1:
+        return datasets_to_concat[0]
+    else:
+        from datasets import concatenate_datasets
+        return concatenate_datasets(datasets_to_concat)
+
+
 def blending_datasets(
     datasets,
     probabilities=None,
@@ -194,8 +247,18 @@ def blending_datasets(
                 strategy.print(f"loaded {dataset} from disk")
             except Exception as e:
                 strategy.print(f"failed to load {dataset} from disk: {e}")
-                data = load_dataset(dataset, data_dir=data_dir)
-                strategy.print(f"loaded {dataset} from files")
+                # 尝试使用带错误处理的目录加载
+                try:
+                    data = load_directory_with_error_handling(dataset, strategy)
+                    strategy.print(f"使用错误处理成功加载目录 {dataset}")
+                except Exception as e2:
+                    strategy.print(f"错误处理加载目录失败 {dataset}: {str(e2)}，尝试标准方法")
+                    try:
+                        data = load_dataset(dataset, data_dir=data_dir)
+                        strategy.print(f"loaded {dataset} from files")
+                    except Exception as e3:
+                        strategy.print(f"所有加载方法都失败，跳过数据集 {dataset}: {str(e3)}")
+                        continue
         # remote/local folder or common file
         elif strategy.args.use_ms:
             from modelscope.msdatasets import MsDataset
