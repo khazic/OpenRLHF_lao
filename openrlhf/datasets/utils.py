@@ -1,10 +1,127 @@
 import os
-
+import json
+import tempfile
 from datasets import interleave_datasets, load_dataset, load_from_disk
 
 
 def exist_and_not_none(d, key):
     return key in d and not d[key] is None
+
+
+def load_json_with_error_handling(file_path, strategy=None):
+    """
+    加载JSON文件，跳过损坏的样本
+    """
+    valid_data = []
+    error_count = 0
+    total_lines = 0
+    
+    strategy.print(f"使用错误处理加载JSON文件: {file_path}")
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            
+            # 尝试作为完整JSON文件加载
+            if content.startswith('[') and content.endswith(']'):
+                try:
+                    data_list = json.loads(content)
+                    for i, item in enumerate(data_list):
+                        total_lines += 1
+                        if isinstance(item, dict):
+                            valid_data.append(item)
+                        else:
+                            error_count += 1
+                            strategy.print(f"跳过第{i+1}个项目: 不是有效的字典对象")
+                except json.JSONDecodeError as e:
+                    strategy.print(f"完整JSON解析失败: {str(e)}，尝试逐行解析")
+                    # 如果完整解析失败，回退到逐行解析
+                    valid_data, error_count, total_lines = _parse_json_lines(content, strategy)
+            else:
+                # 作为JSONL格式逐行解析
+                valid_data, error_count, total_lines = _parse_json_lines(content, strategy)
+                
+    except Exception as e:
+        strategy.print(f"读取文件失败 {file_path}: {str(e)}")
+        raise e
+    
+    strategy.print(f"成功加载 {len(valid_data)} 个有效样本，跳过 {error_count} 个损坏样本，总共 {total_lines} 行")
+    
+    if not valid_data:
+        raise ValueError(f"文件中没有找到有效数据: {file_path}")
+    
+    # 创建临时文件保存清理后的数据
+    temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False, encoding='utf-8')
+    try:
+        for item in valid_data:
+            temp_file.write(json.dumps(item, ensure_ascii=False) + '\n')
+        temp_file.close()
+        
+        # 使用datasets加载清理后的数据
+        dataset = load_dataset('json', data_files=temp_file.name)['train']
+        return dataset
+    finally:
+        # 清理临时文件
+        try:
+            os.unlink(temp_file.name)
+        except:
+            pass
+
+
+def _parse_json_lines(content, strategy):
+    """逐行解析JSON内容"""
+    valid_data = []
+    error_count = 0
+    total_lines = 0
+    
+    lines = content.split('\n')
+    for line_num, line in enumerate(lines, 1):
+        line = line.strip()
+        if not line:
+            continue
+            
+        total_lines += 1
+        try:
+            data = json.loads(line)
+            if isinstance(data, dict):
+                # 基本验证数据结构
+                if _validate_reward_data_structure(data):
+                    valid_data.append(data)
+                else:
+                    error_count += 1
+                    strategy.print(f"跳过第{line_num}行: 数据结构不符合奖励模型要求")
+            else:
+                error_count += 1
+                strategy.print(f"跳过第{line_num}行: 不是有效的字典对象")
+        except json.JSONDecodeError as e:
+            error_count += 1
+            strategy.print(f"跳过第{line_num}行: JSON解析错误 - {str(e)}")
+        except Exception as e:
+            error_count += 1
+            strategy.print(f"跳过第{line_num}行: {str(e)}")
+    
+    return valid_data, error_count, total_lines
+
+
+def _validate_reward_data_structure(data):
+    """验证奖励数据的基本结构"""
+    # 检查是否包含必要的字段
+    required_fields = ['chosen', 'rejected']
+    optional_fields = ['prompt', 'question', 'instruction', 'input']
+    
+    # 至少要有chosen和rejected字段
+    if not all(field in data for field in required_fields):
+        return False
+    
+    # 检查chosen和rejected是否为字符串或列表
+    for field in required_fields:
+        if not isinstance(data[field], (str, list)):
+            return False
+    
+    # 检查是否至少有一个prompt相关字段
+    has_prompt_field = any(field in data for field in optional_fields)
+    
+    return True  # 允许没有prompt字段的数据
 
 
 def blending_datasets(
@@ -52,8 +169,24 @@ def blending_datasets(
             ext = ext.lower().strip(".")
             if ext == "jsonl":
                 ext = "json"
-            data = load_dataset(ext, data_files=dataset)
-            strategy.print(f"loaded {dataset} with data_files={dataset}")
+            
+            # 对JSON文件使用错误处理加载
+            if ext == "json":
+                try:
+                    data = load_json_with_error_handling(dataset, strategy)
+                    strategy.print(f"使用错误处理成功加载 {dataset}")
+                except Exception as e:
+                    strategy.print(f"错误处理加载失败 {dataset}: {str(e)}，尝试标准加载方法")
+                    try:
+                        data = load_dataset(ext, data_files=dataset)
+                        strategy.print(f"使用标准方法加载 {dataset}")
+                    except Exception as e2:
+                        strategy.print(f"标准加载方法也失败 {dataset}: {str(e2)}")
+                        # 跳过这个数据集
+                        continue
+            else:
+                data = load_dataset(ext, data_files=dataset)
+                strategy.print(f"loaded {dataset} with data_files={dataset}")
         # local dataset saved with `datasets.Dataset.save_to_disk`
         elif os.path.isdir(dataset):
             try:

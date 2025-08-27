@@ -84,13 +84,22 @@ class RewardDataset(Dataset):
             if tokenizer_chat_template:
                 self.tokenizer.chat_template = tokenizer_chat_template
 
-        # Parallel loading datasets
+        # Parallel loading datasets with error handling
+        initial_count = len(dataset)
+        strategy.print(f"开始处理 {initial_count} 个样本")
+        
         processed_dataset = dataset.map(
-            self.process_data, remove_columns=dataset.column_names, num_proc=num_processors
+            self.process_data_with_error_handling, 
+            remove_columns=dataset.column_names, 
+            num_proc=num_processors,
+            desc="处理奖励数据集"
         )
 
-        # Filter out None values if necessary
-        processed_dataset = processed_dataset.filter(lambda x: x["prompt"] is not None)
+        # Filter out None values and invalid data
+        processed_dataset = processed_dataset.filter(lambda x: x["prompt"] is not None and x["chosen"] is not None and x["reject"] is not None)
+        
+        final_count = len(processed_dataset)
+        strategy.print(f"处理完成：保留 {final_count} 个有效样本，过滤掉 {initial_count - final_count} 个无效样本")
 
         # Store the processed data in class attributes
         self.prompts = processed_dataset["prompt"]
@@ -98,7 +107,32 @@ class RewardDataset(Dataset):
         self.rejects = processed_dataset["reject"]
         self.extras = processed_dataset["extra"]
 
+    def process_data_with_error_handling(self, data):
+        """带错误处理的数据处理函数"""
+        try:
+            return self.process_data(data)
+        except Exception as e:
+            # 记录错误但不中断处理
+            print(f"跳过损坏样本: {str(e)}")
+            return {
+                "prompt": None,
+                "chosen": None,
+                "reject": None,
+                "extra": None,
+            }
+
     def process_data(self, data):
+        # 检查必要字段是否存在
+        chosen_key = self.chosen_key or "chosen"
+        rejected_key = self.rejected_key or "rejected"
+        
+        if chosen_key not in data or rejected_key not in data:
+            raise ValueError(f"缺少必要字段: chosen_key={chosen_key}, rejected_key={rejected_key}")
+        
+        # 检查字段值是否为空
+        if not data[chosen_key] or not data[rejected_key]:
+            raise ValueError("chosen或rejected字段为空")
+        
         prompt, chosen, reject, margin = preprocess_data(
             data,
             self.input_template,
