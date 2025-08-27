@@ -290,6 +290,17 @@ class ActorPPOTrainer(ABC):
         status = {"policy_loss": actor_loss.detach().item(), "actor_lr": self.actor_scheduler.get_last_lr()[0]}
         if self.args.entropy_loss_coef is not None:
             status["entropy_loss"] = entropy_loss.detach().item()
+        
+        if self.args.entropy_loss_coef is not None and hasattr(output, 'entropy'):
+            token_entropy = output.entropy.mean().item()
+            
+            sequence_entropy = output.entropy.sum(dim=1).mean().item()
+            
+            policy_entropy = token_entropy
+            
+            status["token_entropy"] = token_entropy
+            status["sequence_entropy"] = sequence_entropy
+            status["policy_entropy"] = policy_entropy
 
         # merge logs from info field
         for k, v in experience.info.items():
