@@ -41,6 +41,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --zero_stage 3 \
    --bf16 \
    --actor_learning_rate 5e-7 \
+   --init_kl_coef 0.0 \
    --prompt_data /xfr_ceph_sh/liuchonghan/prompt_dataset \
    --input_key context_messages \
    --apply_chat_template \
@@ -58,7 +59,6 @@ python3 -m openrlhf.cli.train_ppo_ray \
 
 #    --overlong_penalty_factor 0.5 \
 #    --overlong_buffer_len 256 \
-#    --init_kl_coef 1e-3 \
 #    --kl_estimator k2 \
 #    --use_kl_loss \
 #    --eps_clip_low_high 0.15 0.25 \
