@@ -23,7 +23,7 @@ export NCCL_DEBUG_SUBSYS=NONE
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_rm \
-   --save_path ./checkpoint/RewardModel_0828_tongyong \
+   --save_path ./checkpoint/RewardModel_0828_translate \
    --save_steps -1 \
    --logging_steps 1 \
    --eval_steps 50 \
@@ -34,7 +34,7 @@ openrlhf.cli.train_rm \
    --max_epochs 1 \
    --max_len 8192 \
    --learning_rate 1e-6 \
-   --dataset /xfr_ceph_sh/liuchonghan/tongyong_dataset \
+   --dataset /xfr_ceph_sh/liuchonghan/reward_dataset \
    --chosen_key chosen \
    --rejected_key rejected \
    --max_samples 10000000 \
@@ -45,7 +45,7 @@ openrlhf.cli.train_rm \
    --value_head_prefix score \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo \
-   --wandb_run_name reward_model_tongyong_0828
+   --wandb_run_name reward_model_translate_0828
 EOF
 
 if [[ ${1} != "slurm" ]]; then
