@@ -84,15 +84,13 @@ class RewardDataset(Dataset):
             if tokenizer_chat_template:
                 self.tokenizer.chat_template = tokenizer_chat_template
 
-        # Parallel loading datasets with error handling
+        # Parallel loading datasets
         processed_dataset = dataset.map(
-            self.process_data_with_error_handling, 
-            remove_columns=dataset.column_names, 
-            num_proc=num_processors
+            self.process_data, remove_columns=dataset.column_names, num_proc=num_processors
         )
 
-        # Filter out None values and invalid data
-        processed_dataset = processed_dataset.filter(lambda x: x["prompt"] is not None and x["chosen"] is not None and x["reject"] is not None)
+        # Filter out None values if necessary
+        processed_dataset = processed_dataset.filter(lambda x: x["prompt"] is not None)
 
         # Store the processed data in class attributes
         self.prompts = processed_dataset["prompt"]
@@ -100,57 +98,7 @@ class RewardDataset(Dataset):
         self.rejects = processed_dataset["reject"]
         self.extras = processed_dataset["extra"]
 
-    def process_data_with_error_handling(self, data):
-        """带错误处理的数据处理函数，静默跳过不符合的样本"""
-        try:
-            return self.process_data(data)
-        except Exception:
-            # 静默跳过错误样本，不输出任何信息
-            return {
-                "prompt": None,
-                "chosen": None,
-                "reject": None,
-                "extra": None,
-            }
-
     def process_data(self, data):
-        # 检查必要字段是否存在，支持多种字段名变体
-        chosen_key = self.chosen_key or "chosen"
-        rejected_key = self.rejected_key or "rejected"
-        
-        # 尝试寻找chosen字段的变体
-        chosen_variants = [chosen_key, 'chosen', 'response_chosen', 'answer_chosen', 'good', 'preferred']
-        actual_chosen_key = None
-        for variant in chosen_variants:
-            if variant in data:
-                actual_chosen_key = variant
-                break
-        
-        # 尝试寻找rejected字段的变体  
-        rejected_variants = [rejected_key, 'rejected', 'response_rejected', 'answer_rejected', 'bad', 'dispreferred']
-        actual_rejected_key = None
-        for variant in rejected_variants:
-            if variant in data:
-                actual_rejected_key = variant
-                break
-        
-        # 静默跳过缺少必要字段的数据
-        if not actual_chosen_key or not actual_rejected_key:
-            raise ValueError("Missing required fields")
-        
-        # 检查字段值是否为空，静默跳过
-        chosen_value = data[actual_chosen_key]
-        rejected_value = data[actual_rejected_key]
-        
-        if not chosen_value or chosen_value is None or not rejected_value or rejected_value is None:
-            raise ValueError("Empty field values")
-        
-        # 临时更新键名以供后续处理使用
-        if actual_chosen_key != chosen_key:
-            data[chosen_key] = data[actual_chosen_key]
-        if actual_rejected_key != rejected_key:
-            data[rejected_key] = data[actual_rejected_key]
-        
         prompt, chosen, reject, margin = preprocess_data(
             data,
             self.input_template,
@@ -189,15 +137,6 @@ class RewardDataset(Dataset):
 
     def __getitem__(self, idx):
         prompt, chosen, reject, extra = self.prompts[idx], self.chosens[idx], self.rejects[idx], self.extras[idx]
-
-        # 调试：检查chosen和rejected是否相同
-        if idx < 5:  # 只打印前5个样本避免刷屏
-            print(f"样本 {idx}:")
-            print(f"  prompt: {prompt[:50]}...")
-            print(f"  chosen: {chosen[:50]}...")
-            print(f"  reject: {reject[:50]}...")
-            print(f"  chosen==reject: {chosen == reject}")
-            print("-" * 50)
 
         chosen = (prompt + chosen).rstrip("\n")
         if not chosen.endswith(self.tokenizer.eos_token):

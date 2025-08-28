@@ -143,19 +143,6 @@ class RewardModelTrainer(ABC):
                     self.model, chosen_ids, c_mask, reject_ids, r_mask
                 )
 
-                # 调试：检查输入是否相同
-                if step < 3:  # 只打印前3步
-                    print(f"步骤 {step}:")
-                    print(f"  chosen_ids shape: {chosen_ids.shape}")
-                    print(f"  reject_ids shape: {reject_ids.shape}")
-                    print(f"  chosen_ids相等: {torch.equal(chosen_ids, reject_ids)}")
-                    print(f"  chosen_reward: {chosen_reward.mean().item():.4f}")
-                    print(f"  reject_reward: {reject_reward.mean().item():.4f}")
-                    if chosen_ids.shape[0] > 0:
-                        print(f"  第一个样本chosen前10个token: {chosen_ids[0][:10].tolist()}")
-                        print(f"  第一个样本reject前10个token: {reject_ids[0][:10].tolist()}")
-                    print("-" * 50)
-
                 if self.margin_loss:
                     margin = torch.tensor(margin).to(torch.cuda.current_device())
                 else:
