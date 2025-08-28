@@ -85,21 +85,14 @@ class RewardDataset(Dataset):
                 self.tokenizer.chat_template = tokenizer_chat_template
 
         # Parallel loading datasets with error handling
-        initial_count = len(dataset)
-        strategy.print(f"开始处理 {initial_count} 个样本")
-        
         processed_dataset = dataset.map(
             self.process_data_with_error_handling, 
             remove_columns=dataset.column_names, 
-            num_proc=num_processors,
-            desc="处理奖励数据集"
+            num_proc=num_processors
         )
 
         # Filter out None values and invalid data
         processed_dataset = processed_dataset.filter(lambda x: x["prompt"] is not None and x["chosen"] is not None and x["reject"] is not None)
-        
-        final_count = len(processed_dataset)
-        strategy.print(f"处理完成：保留 {final_count} 个有效样本，过滤掉 {initial_count - final_count} 个无效样本")
 
         # Store the processed data in class attributes
         self.prompts = processed_dataset["prompt"]
@@ -108,12 +101,11 @@ class RewardDataset(Dataset):
         self.extras = processed_dataset["extra"]
 
     def process_data_with_error_handling(self, data):
-        """带错误处理的数据处理函数"""
+        """带错误处理的数据处理函数，静默跳过不符合的样本"""
         try:
             return self.process_data(data)
-        except Exception as e:
-            # 记录错误但不中断处理
-            print(f"跳过损坏样本: {str(e)}")
+        except Exception:
+            # 静默跳过错误样本，不输出任何信息
             return {
                 "prompt": None,
                 "chosen": None,
@@ -122,16 +114,42 @@ class RewardDataset(Dataset):
             }
 
     def process_data(self, data):
-        # 检查必要字段是否存在
+        # 检查必要字段是否存在，支持多种字段名变体
         chosen_key = self.chosen_key or "chosen"
         rejected_key = self.rejected_key or "rejected"
         
-        if chosen_key not in data or rejected_key not in data:
-            raise ValueError(f"缺少必要字段: chosen_key={chosen_key}, rejected_key={rejected_key}")
+        # 尝试寻找chosen字段的变体
+        chosen_variants = [chosen_key, 'chosen', 'response_chosen', 'answer_chosen', 'good', 'preferred']
+        actual_chosen_key = None
+        for variant in chosen_variants:
+            if variant in data:
+                actual_chosen_key = variant
+                break
         
-        # 检查字段值是否为空
-        if not data[chosen_key] or not data[rejected_key]:
-            raise ValueError("chosen或rejected字段为空")
+        # 尝试寻找rejected字段的变体  
+        rejected_variants = [rejected_key, 'rejected', 'response_rejected', 'answer_rejected', 'bad', 'dispreferred']
+        actual_rejected_key = None
+        for variant in rejected_variants:
+            if variant in data:
+                actual_rejected_key = variant
+                break
+        
+        # 静默跳过缺少必要字段的数据
+        if not actual_chosen_key or not actual_rejected_key:
+            raise ValueError("Missing required fields")
+        
+        # 检查字段值是否为空，静默跳过
+        chosen_value = data[actual_chosen_key]
+        rejected_value = data[actual_rejected_key]
+        
+        if not chosen_value or chosen_value is None or not rejected_value or rejected_value is None:
+            raise ValueError("Empty field values")
+        
+        # 临时更新键名以供后续处理使用
+        if actual_chosen_key != chosen_key:
+            data[chosen_key] = data[actual_chosen_key]
+        if actual_rejected_key != rejected_key:
+            data[rejected_key] = data[actual_rejected_key]
         
         prompt, chosen, reject, margin = preprocess_data(
             data,

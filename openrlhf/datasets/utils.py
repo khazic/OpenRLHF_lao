@@ -89,39 +89,57 @@ def _parse_json_lines(content, strategy):
                     valid_data.append(data)
                 else:
                     error_count += 1
-                    strategy.print(f"跳过第{line_num}行: 数据结构不符合奖励模型要求")
             else:
                 error_count += 1
-                strategy.print(f"跳过第{line_num}行: 不是有效的字典对象")
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             error_count += 1
-            strategy.print(f"跳过第{line_num}行: JSON解析错误 - {str(e)}")
-        except Exception as e:
+        except Exception:
             error_count += 1
-            strategy.print(f"跳过第{line_num}行: {str(e)}")
     
     return valid_data, error_count, total_lines
 
 
 def _validate_reward_data_structure(data):
-    """验证奖励数据的基本结构"""
-    # 检查是否包含必要的字段
-    required_fields = ['chosen', 'rejected']
-    optional_fields = ['prompt', 'question', 'instruction', 'input']
-    
-    # 至少要有chosen和rejected字段
-    if not all(field in data for field in required_fields):
-        return False
-    
-    # 检查chosen和rejected是否为字符串或列表
-    for field in required_fields:
-        if not isinstance(data[field], (str, list)):
+    """验证奖励数据的基本结构，不符合直接跳过"""
+    try:
+        # 检查所有可能的字段名变体
+        chosen_variants = ['chosen', 'response_chosen', 'answer_chosen', 'good', 'preferred']
+        rejected_variants = ['rejected', 'response_rejected', 'answer_rejected', 'bad', 'dispreferred']
+        
+        # 寻找chosen字段
+        chosen_field = None
+        for variant in chosen_variants:
+            if variant in data:
+                chosen_field = variant
+                break
+        
+        # 寻找rejected字段
+        rejected_field = None  
+        for variant in rejected_variants:
+            if variant in data:
+                rejected_field = variant
+                break
+        
+        # 静默跳过缺少必要字段的数据
+        if not chosen_field or not rejected_field:
             return False
-    
-    # 检查是否至少有一个prompt相关字段
-    has_prompt_field = any(field in data for field in optional_fields)
-    
-    return True  # 允许没有prompt字段的数据
+        
+        # 静默跳过字段值为空或None的数据
+        chosen_value = data[chosen_field]
+        rejected_value = data[rejected_field]
+        
+        if not chosen_value or chosen_value is None or not rejected_value or rejected_value is None:
+            return False
+        
+        # 静默跳过不支持的数据类型
+        valid_types = (str, list, dict)
+        if not isinstance(chosen_value, valid_types) or not isinstance(rejected_value, valid_types):
+            return False
+        
+        return True
+    except:
+        # 任何异常都静默跳过
+        return False
 
 
 def load_directory_with_error_handling(directory_path, strategy):
@@ -151,8 +169,7 @@ def load_directory_with_error_handling(directory_path, strategy):
             strategy.print(f"处理JSON文件: {json_file}")
             data = load_json_with_error_handling(json_file, strategy)
             datasets_to_concat.append(data)
-        except Exception as e:
-            strategy.print(f"跳过损坏的JSON文件 {json_file}: {str(e)}")
+        except Exception:
             continue
     
     # 处理其他格式文件
@@ -162,8 +179,7 @@ def load_directory_with_error_handling(directory_path, strategy):
             strategy.print(f"处理{ext.upper()}文件: {other_file}")
             data = load_dataset(ext, data_files=other_file)['train']
             datasets_to_concat.append(data)
-        except Exception as e:
-            strategy.print(f"跳过损坏的文件 {other_file}: {str(e)}")
+        except Exception:
             continue
     
     if not datasets_to_concat:
