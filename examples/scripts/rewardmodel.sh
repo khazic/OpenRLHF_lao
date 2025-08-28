@@ -35,9 +35,10 @@ openrlhf.cli.train_rm \
    --max_len 8192 \
    --learning_rate 1e-6 \
    --dataset /xfr_ceph_sh/liuchonghan/tongyong_dataset \
-   --apply_chat_template \
    --chosen_key chosen \
    --rejected_key rejected \
+   --prompt_key prompt \
+   --max_samples 1000 \
    --packing_samples \
    --gradient_checkpointing \
    --value_head_prefix score \

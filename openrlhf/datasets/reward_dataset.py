@@ -89,8 +89,8 @@ class RewardDataset(Dataset):
             self.process_data, remove_columns=dataset.column_names, num_proc=num_processors
         )
 
-        # Filter out None values if necessary
-        processed_dataset = processed_dataset.filter(lambda x: x["prompt"] is not None)
+        # Filter out None values and samples where chosen==rejected
+        processed_dataset = processed_dataset.filter(lambda x: x["prompt"] is not None and x["chosen"] is not None and x["reject"] is not None)
 
         # Store the processed data in class attributes
         self.prompts = processed_dataset["prompt"]
@@ -99,6 +99,23 @@ class RewardDataset(Dataset):
         self.extras = processed_dataset["extra"]
 
     def process_data(self, data):
+        # 调试：打印原始数据的前几个样本
+        if hasattr(self, '_debug_count'):
+            self._debug_count += 1
+        else:
+            self._debug_count = 1
+            
+        if self._debug_count <= 3:
+            print(f"原始数据样本 {self._debug_count}:")
+            print(f"  数据键: {list(data.keys())}")
+            print(f"  chosen_key设置: {self.chosen_key}")
+            print(f"  rejected_key设置: {self.rejected_key}")
+            if 'chosen' in data:
+                print(f"  chosen内容: {str(data['chosen'])[:100]}...")
+            if 'rejected' in data:
+                print(f"  rejected内容: {str(data['rejected'])[:100]}...")
+            print("-" * 60)
+        
         prompt, chosen, reject, margin = preprocess_data(
             data,
             self.input_template,
@@ -108,6 +125,24 @@ class RewardDataset(Dataset):
             self.apply_chat_template,
             self.is_dpo,
         )
+
+        # 调试：打印处理后的数据
+        if self._debug_count <= 3:
+            print(f"处理后数据样本 {self._debug_count}:")
+            print(f"  prompt: {str(prompt)[:100]}...")
+            print(f"  chosen: {str(chosen)[:100]}...")
+            print(f"  reject: {str(reject)[:100]}...")
+            print(f"  chosen==reject: {chosen == reject}")
+            print("=" * 60)
+
+        # 检查chosen和rejected是否相同，如果相同则跳过
+        if chosen == reject:
+            return {
+                "prompt": None,
+                "chosen": None,
+                "reject": None,
+                "extra": None,
+            }
 
         if self.is_dpo:
             prompt_token = self.tokenizer(

@@ -60,19 +60,7 @@ class SFTDataset(Dataset):
         self.max_length = max_length
         self.multiturn = multiturn
 
-        # 检查是否为arrow格式（input_ids/attention_mask/loss_mask）
-        arrow_keys = {"input_ids", "attention_mask", "loss_mask"}
-        if arrow_keys.issubset(set(dataset.column_names)):
-            print("Detected arrow format: using pre-tokenized data.")
-            self.use_arrow = True
-            self.input_ids = dataset["input_ids"]
-            self.attention_mask = dataset["attention_mask"]
-            self.loss_mask = dataset["loss_mask"]
-            return  # 直接返回，不再做后续文本处理
-        else:
-            self.use_arrow = False
-
-        # 原有的文本处理流程
+        # chat template
         self.input_template = input_template
         self.input_key = getattr(self.strategy.args, "input_key", None)
         self.output_key = getattr(self.strategy.args, "output_key", None)
@@ -84,6 +72,7 @@ class SFTDataset(Dataset):
             if tokenizer_chat_template:
                 self.tokenizer.chat_template = tokenizer_chat_template
 
+        # Parallel loading datasets
         processed_dataset = dataset.map(
             self.process_data,
             remove_columns=dataset.column_names,
@@ -91,6 +80,7 @@ class SFTDataset(Dataset):
         )
         processed_dataset = processed_dataset.filter(lambda x: x["prompt"] is not None)
 
+        # Store the processed data in class attributes
         self.prompts = processed_dataset["prompt"]
         self.responses = processed_dataset["response"]
         self.prompt_ids_lens = processed_dataset["prompt_ids_len"]
@@ -177,54 +167,37 @@ class SFTDataset(Dataset):
         }
 
     def __len__(self):
-        if getattr(self, "use_arrow", False):
-            return len(self.input_ids)
-        else:
-            return len(self.prompts)
+        length = len(self.prompts)
+        return length
 
     def __getitem__(self, idx):
-        if getattr(self, "use_arrow", False):
-            input_ids = torch.tensor(self.input_ids[idx])
-            attention_mask = torch.tensor(self.attention_mask[idx])
-            loss_mask = torch.tensor(self.loss_mask[idx])
+        prompt = self.prompts[idx]
+        response = self.responses[idx]
 
-            # 确保维度正确：[seq_len] -> [1, seq_len]
-            if input_ids.dim() == 1:
-                input_ids = input_ids.unsqueeze(0)
-            if attention_mask.dim() == 1:
-                attention_mask = attention_mask.unsqueeze(0)
-            if loss_mask.dim() == 1:
-                loss_mask = loss_mask.unsqueeze(0)
-
-            return input_ids, attention_mask, loss_mask
+        if not self.pretrain_mode:
+            text = (prompt + response).rstrip("\n")
+            if not text.endswith(self.tokenizer.eos_token):
+                text += " " + self.tokenizer.eos_token
         else:
-            # 原有的文本处理逻辑
-            prompt = self.prompts[idx]
-            response = self.responses[idx]
+            text = prompt
 
-            if not self.pretrain_mode:
-                text = (prompt + response).rstrip("\n")
-                if not text.endswith(self.tokenizer.eos_token):
-                    text += " " + self.tokenizer.eos_token
-            else:
-                text = prompt
+        input_token = self.tokenizer(
+            text,
+            max_length=self.max_length,
+            padding=False,
+            truncation=True,
+            return_tensors="pt",
+            add_special_tokens=False,
+        )
+        input_ids = input_token["input_ids"]
+        attention_mask = input_token["attention_mask"]
+        loss_mask = self.get_loss_mask(input_ids, idx)
 
-            input_token = self.tokenizer(
-                text,
-                max_length=self.max_length,
-                padding=False,
-                truncation=True,
-                return_tensors="pt",
-                add_special_tokens=False,
-            )
-            input_ids = input_token["input_ids"]
-            attention_mask = input_token["attention_mask"]
-            loss_mask = self.get_loss_mask(input_ids, idx)
-
-            if not self.pretrain_mode:
-                input_ids[0][-1] = self.tokenizer.eos_token_id
-                attention_mask[0][-1] = True
-            return input_ids, attention_mask, loss_mask
+        if not self.pretrain_mode:
+            # to avoid EOS_token truncation
+            input_ids[0][-1] = self.tokenizer.eos_token_id
+            attention_mask[0][-1] = True
+        return input_ids, attention_mask, loss_mask
 
     def get_loss_mask(self, input_ids, idx):
         if self.pretrain_mode:
