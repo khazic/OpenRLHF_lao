@@ -1,6 +1,9 @@
 import os
+import tempfile
+import json
+import glob
 
-from datasets import interleave_datasets, load_dataset, load_from_disk
+from datasets import interleave_datasets, load_dataset, load_from_disk, concatenate_datasets
 
 
 def exist_and_not_none(d, key):
@@ -61,8 +64,12 @@ def blending_datasets(
                 strategy.print(f"loaded {dataset} from disk")
             except Exception as e:
                 strategy.print(f"failed to load {dataset} from disk: {e}")
-                data = load_dataset(dataset, data_dir=data_dir)
-                strategy.print(f"loaded {dataset} from files")
+                try:
+                    data = load_directory_with_error_handling(dataset, strategy)
+                    strategy.print(f"loaded {dataset} with error handling")
+                except Exception as e2:
+                    data = load_dataset(dataset, data_dir=data_dir)
+                    strategy.print(f"loaded {dataset} from files")
         # remote/local folder or common file
         elif strategy.args.use_ms:
             from modelscope.msdatasets import MsDataset
@@ -97,3 +104,184 @@ def blending_datasets(
         )
 
     return dataset
+
+
+def _validate_reward_data_structure(data):
+    """Validate if data contains correct reward model fields"""
+    if not isinstance(data, dict):
+        return False
+    
+    # Check multiple variants of chosen field
+    chosen_keys = ["chosen", "response_chosen", "good", "better", "win"]
+    rejected_keys = ["rejected", "response_rejected", "bad", "worse", "lose"]
+    
+    chosen_key = None
+    rejected_key = None
+    
+    for key in chosen_keys:
+        if key in data and data[key]:
+            chosen_key = key
+            break
+    
+    for key in rejected_keys:
+        if key in data and data[key]:
+            rejected_key = key
+            break
+    
+    return chosen_key is not None and rejected_key is not None
+
+
+def load_json_with_error_handling(file_path, strategy=None):
+    """Load JSON file, skip problematic samples"""
+    valid_data = []
+    total_count = 0
+    valid_count = 0
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+        
+        # Try to parse as complete JSON array
+        try:
+            data = json.loads(content)
+            if isinstance(data, list):
+                for item in data:
+                    total_count += 1
+                    if _validate_reward_data_structure(item):
+                        # Only keep necessary three columns: prompt, chosen, rejected
+                        chosen = item.get('chosen', item.get('response_chosen', item.get('good', '')))
+                        rejected = item.get('rejected', item.get('response_rejected', item.get('bad', '')))
+                        
+                        # Skip samples where chosen and rejected are identical
+                        if chosen == rejected:
+                            continue
+                            
+                        filtered_item = {
+                            'prompt': item.get('prompt', ''),
+                            'chosen': chosen,
+                            'rejected': rejected
+                        }
+                        valid_data.append(filtered_item)
+                        valid_count += 1
+            else:
+                # Single object
+                total_count = 1
+                if _validate_reward_data_structure(data):
+                    chosen = data.get('chosen', data.get('response_chosen', data.get('good', '')))
+                    rejected = data.get('rejected', data.get('response_rejected', data.get('bad', '')))
+                    
+                    # Skip samples where chosen and rejected are identical
+                    if chosen != rejected:
+                        filtered_item = {
+                            'prompt': data.get('prompt', ''),
+                            'chosen': chosen,
+                            'rejected': rejected
+                        }
+                        valid_data.append(filtered_item)
+                    valid_count = 1
+        except json.JSONDecodeError:
+            # Try to parse line by line as JSONL
+            valid_data, total_count, valid_count = _parse_json_lines(content, strategy)
+    
+    except Exception as e:
+        if strategy:
+            strategy.print(f"Failed to read file {file_path}: {e}")
+        return load_dataset("json", data_files=[])
+    
+    if not valid_data:
+        return load_dataset("json", data_files=[])
+    
+    # Write valid data to temporary file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False, encoding='utf-8') as temp_file:
+        for item in valid_data:
+            json.dump(item, temp_file, ensure_ascii=False)
+            temp_file.write('\n')
+        temp_file_path = temp_file.name
+    
+    try:
+        dataset = load_dataset("json", data_files=temp_file_path)
+        os.unlink(temp_file_path)  # Clean up temporary file
+        return dataset
+    except Exception as e:
+        os.unlink(temp_file_path)  # Clean up temporary file
+        if strategy:
+            strategy.print(f"Failed to load processed data: {e}")
+        return load_dataset("json", data_files=[])
+
+
+def _parse_json_lines(content, strategy):
+    """Parse JSONL format content"""
+    valid_data = []
+    total_count = 0
+    valid_count = 0
+    
+    lines = content.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        total_count += 1
+        try:
+            data = json.loads(line)
+            if _validate_reward_data_structure(data):
+                # Only keep necessary three columns: prompt, chosen, rejected
+                chosen = data.get('chosen', data.get('response_chosen', data.get('good', '')))
+                rejected = data.get('rejected', data.get('response_rejected', data.get('bad', '')))
+                
+                # Skip samples where chosen and rejected are identical
+                if chosen != rejected:
+                    filtered_item = {
+                        'prompt': data.get('prompt', ''),
+                        'chosen': chosen,
+                        'rejected': rejected
+                    }
+                    valid_data.append(filtered_item)
+                valid_count += 1
+        except json.JSONDecodeError:
+            continue  # Skip invalid lines
+    
+    return valid_data, total_count, valid_count
+
+
+def load_directory_with_error_handling(directory_path, strategy):
+    """Scan directory for data files and load with error handling"""
+    datasets_to_concat = []
+    
+    # Supported file formats
+    supported_extensions = ['.json', '.jsonl', '.csv', '.parquet', '.arrow']
+    
+    for ext in supported_extensions:
+        pattern = os.path.join(directory_path, f"*{ext}")
+        files = glob.glob(pattern)
+        
+        for file_path in files:
+            try:
+                if ext in ['.json', '.jsonl']:
+                    # Load JSON files with error handling
+                    dataset = load_json_with_error_handling(file_path, strategy)
+                else:
+                    # Other formats use standard loading
+                    if ext == '.csv':
+                        dataset = load_dataset('csv', data_files=file_path)
+                    elif ext == '.parquet':
+                        dataset = load_dataset('parquet', data_files=file_path)
+                    elif ext == '.arrow':
+                        dataset = load_dataset('arrow', data_files=file_path)
+                
+                if len(dataset['train']) > 0:
+                    datasets_to_concat.append(dataset['train'])
+                    if strategy:
+                        strategy.print(f"Successfully loaded file: {file_path}")
+            except Exception as e:
+                if strategy:
+                    strategy.print(f"Failed to load file {file_path}: {e}")
+                continue
+    
+    if not datasets_to_concat:
+        # If no data was successfully loaded, return empty dataset
+        return load_dataset("json", data_files=[])
+    
+    # Merge all datasets
+    final_dataset = concatenate_datasets(datasets_to_concat)
+    return {"train": final_dataset}
