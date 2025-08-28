@@ -22,23 +22,22 @@ def load_json_with_error_handling(file_path, strategy=None):
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read().strip()
             
-            # 尝试作为完整JSON文件加载
             if content.startswith('[') and content.endswith(']'):
                 try:
                     data_list = json.loads(content)
                     for i, item in enumerate(data_list):
                         total_lines += 1
                         if isinstance(item, dict):
-                            valid_data.append(item)
+                            if _validate_reward_data_structure(item):
+                                valid_data.append(item)
+                            else:
+                                error_count += 1
                         else:
                             error_count += 1
-                            strategy.print(f"跳过第{i+1}个项目: 不是有效的字典对象")
                 except json.JSONDecodeError as e:
                     strategy.print(f"完整JSON解析失败: {str(e)}，尝试逐行解析")
-                    # 如果完整解析失败，回退到逐行解析
                     valid_data, error_count, total_lines = _parse_json_lines(content, strategy)
             else:
-                # 作为JSONL格式逐行解析
                 valid_data, error_count, total_lines = _parse_json_lines(content, strategy)
                 
     except Exception as e:
