@@ -38,7 +38,7 @@ openrlhf.cli.train_rm \
    --chosen_key chosen \
    --rejected_key rejected \
    --max_samples 1000 \
-   --apply_chat_template \
+   --prompt_key prompt \
    --attn_implementation flash_attention_2 \
    --packing_samples \
    --gradient_checkpointing \
