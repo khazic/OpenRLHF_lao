@@ -37,7 +37,7 @@ openrlhf.cli.train_rm \
    --dataset /xfr_ceph_sh/liuchonghan/tongyong_dataset \
    --chosen_key chosen \
    --rejected_key rejected \
-   --max_samples 1000 \
+   --max_samples 10000000 \
    --prompt_key prompt \
    --attn_implementation flash_attention_2 \
    --packing_samples \
