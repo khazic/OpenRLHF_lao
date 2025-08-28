@@ -55,7 +55,11 @@ def blending_datasets(
             ext = ext.lower().strip(".")
             if ext == "jsonl":
                 ext = "json"
-            data = load_dataset(ext, data_files=dataset)
+            if ext == "json":
+                # Use our error handling for JSON files
+                data = load_json_with_error_handling(dataset, strategy)
+            else:
+                data = load_dataset(ext, data_files=dataset)
             strategy.print(f"loaded {dataset} with data_files={dataset}")
         # local dataset saved with `datasets.Dataset.save_to_disk`
         elif os.path.isdir(dataset):
@@ -136,6 +140,8 @@ def load_json_with_error_handling(file_path, strategy=None):
     valid_data = []
     total_count = 0
     valid_count = 0
+    validation_failed = 0
+    identical_samples = 0
     
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -154,6 +160,7 @@ def load_json_with_error_handling(file_path, strategy=None):
                         
                         # Skip samples where chosen and rejected are identical
                         if chosen == rejected:
+                            identical_samples += 1
                             continue
                             
                         filtered_item = {
@@ -163,6 +170,8 @@ def load_json_with_error_handling(file_path, strategy=None):
                         }
                         valid_data.append(filtered_item)
                         valid_count += 1
+                    else:
+                        validation_failed += 1
             else:
                 # Single object
                 total_count = 1
@@ -187,6 +196,14 @@ def load_json_with_error_handling(file_path, strategy=None):
         if strategy:
             strategy.print(f"Failed to read file {file_path}: {e}")
         return load_dataset("json", data_files=[])
+    
+    # Print debug info
+    if strategy:
+        strategy.print(f"File: {os.path.basename(file_path)}")
+        strategy.print(f"  Total samples: {total_count}")
+        strategy.print(f"  Validation failed: {validation_failed}")
+        strategy.print(f"  Identical chosen/rejected: {identical_samples}")
+        strategy.print(f"  Valid samples: {valid_count}")
     
     if not valid_data:
         return load_dataset("json", data_files=[])
