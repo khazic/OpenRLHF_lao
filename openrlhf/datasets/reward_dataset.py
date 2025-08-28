@@ -190,6 +190,15 @@ class RewardDataset(Dataset):
     def __getitem__(self, idx):
         prompt, chosen, reject, extra = self.prompts[idx], self.chosens[idx], self.rejects[idx], self.extras[idx]
 
+        # 调试：检查chosen和rejected是否相同
+        if idx < 5:  # 只打印前5个样本避免刷屏
+            print(f"样本 {idx}:")
+            print(f"  prompt: {prompt[:50]}...")
+            print(f"  chosen: {chosen[:50]}...")
+            print(f"  reject: {reject[:50]}...")
+            print(f"  chosen==reject: {chosen == reject}")
+            print("-" * 50)
+
         chosen = (prompt + chosen).rstrip("\n")
         if not chosen.endswith(self.tokenizer.eos_token):
             chosen += " " + self.tokenizer.eos_token
