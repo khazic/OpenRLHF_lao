@@ -34,7 +34,7 @@ openrlhf.cli.train_rm \
    --max_epochs 1 \
    --max_len 8192 \
    --learning_rate 1e-6 \
-   --dataset /xfr_ceph_sh/liuchonghan/reward_dataset \
+   --dataset /xfr_ceph_sh/liuchonghan/tongyong_dataset \
    --chosen_key chosen \
    --rejected_key rejected \
    --max_samples 1000 \
