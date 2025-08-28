@@ -27,8 +27,8 @@ openrlhf.cli.train_rm \
    --save_steps -1 \
    --logging_steps 1 \
    --eval_steps 50 \
-   --train_batch_size 24 \
-   --micro_train_batch_size 2 \
+   --train_batch_size 48 \
+   --micro_train_batch_size 1 \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
    --bf16 \
    --max_epochs 1 \
