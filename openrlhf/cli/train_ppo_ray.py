@@ -363,7 +363,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--kl_estimator",
         type=str,
-        default="k1",
+        default="k2",
         choices=["k1", "k2", "k3"],
         help=(
             "In GRPO, k3 is utilized as the loss function, while k2, when used as the loss, is nearly equivalent to k1."
@@ -373,8 +373,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--entropy_loss_coef",
         type=float,
-        default=None,
+        default=0.0,
         help="Entropy loss coef, set to 0 means only enable entropy logs",
+    )
+    parser.add_argument(
+        "--entropy_var_coef",
+        type=float,
+        default=0.0005,
+        help="Entropy variance regularization coefficient, penalizes inconsistent entropy across samples"
     )
     parser.add_argument("--adam_betas", type=float, nargs=2, default=(0.9, 0.95), help="Betas for Adam optimizer")
     parser.add_argument("--reward_clip_range", type=float, nargs=2, default=(-10, 10), help="Reward clip range")

@@ -266,8 +266,22 @@ class ActorPPOTrainer(ABC):
         # entropy loss
         if self.args.entropy_loss_coef is not None:
             entropy_loss = masked_mean(output.entropy[:, -experience.action_mask.shape[1] :], experience.action_mask)
+            
+            if hasattr(self.args, 'entropy_var_coef') and self.args.entropy_var_coef > 0:
+                entropy_for_actions = output.entropy[:, -experience.action_mask.shape[1]:]
+                sample_entropies = (entropy_for_actions * experience.action_mask).sum(dim=1) / experience.action_mask.sum(dim=1)
+                
+                entropy_var = torch.var(sample_entropies, unbiased=False)
+                
+                total_entropy_loss = entropy_loss + self.args.entropy_var_coef * entropy_var
+                
+                experience.info["entropy_var"] = entropy_var.detach()
+                experience.info["entropy_var_loss"] = (self.args.entropy_var_coef * entropy_var).detach()
+            else:
+                total_entropy_loss = entropy_loss
+            
             if self.args.entropy_loss_coef != 0:
-                loss -= entropy_loss * self.args.entropy_loss_coef
+                loss -= total_entropy_loss * self.args.entropy_loss_coef
 
         if self.args.use_dynamic_batch:
             loss = loss * self.replay_buffer.dynamic_loss_scale[step]
@@ -296,7 +310,12 @@ class ActorPPOTrainer(ABC):
             
             sequence_entropy = output.entropy.sum(dim=1).mean().item()
             
-            policy_entropy = token_entropy
+            if hasattr(experience, 'action_mask') and experience.action_mask is not None:
+                entropy_for_actions = output.entropy[:, -experience.action_mask.shape[1]:]
+                sample_entropies = (entropy_for_actions * experience.action_mask).sum(dim=1) / experience.action_mask.sum(dim=1)
+                policy_entropy = sample_entropies.mean().item()
+            else:
+                policy_entropy = output.entropy.mean(dim=1).mean().item()
             
             status["token_entropy"] = token_entropy
             status["sequence_entropy"] = sequence_entropy
