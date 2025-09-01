@@ -54,7 +54,6 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --generate_max_len 2048 \
    --zero_stage 3 \
    --bf16 \
-   --deepspeed_backend gloo \
    --actor_learning_rate 5e-7 \
    --prompt_data /xfr_ceph_sh/liuchonghan/prompt_dataset \
    --input_key context_messages \
