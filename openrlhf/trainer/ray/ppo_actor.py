@@ -227,17 +227,13 @@ class ActorPPOTrainer(ABC):
                 action_tokens = sequences[:, -action_len:]  # [batch_size, action_len]
                 
                 # Determine the ID range of new tokens
-                if self.new_token_ids is not None and len(self.new_token_ids) > 0:
-                    # Use token list loaded from tokenizer config (cache tensor to avoid repeated creation)
-                    if not hasattr(self, '_new_token_tensor') or self._new_token_tensor.device != action_tokens.device:
-                        self._new_token_tensor = torch.tensor(self.new_token_ids, device=action_tokens.device)
-                    new_token_mask = torch.isin(action_tokens, self._new_token_tensor).float()
-                elif self.original_vocab_size is not None:
-                    # Use fallback: all tokens >= original_vocab_size
+                # Use simpler range-based detection to avoid memory issues with large token lists
+                if self.original_vocab_size is not None:
+                    # Use range-based detection: all tokens >= original_vocab_size
                     new_token_mask = (action_tokens >= self.original_vocab_size).float()
                 else:
                     # Cannot determine new tokens, skip monitoring
-                    print("[NewTokenMonitoring] Warning: Cannot determine new tokens without config or vocab size")
+                    print("[NewTokenMonitoring] Warning: Cannot determine new tokens without vocab size")
                     return {}
                 
                 # Valid new token mask (considering action_mask)
@@ -252,6 +248,7 @@ class ActorPPOTrainer(ABC):
                     valid_original_mask = torch.zeros_like(action_mask)
                 
                 total_action_count = action_mask.sum().item()
+                avg_new_token_entropy = None  # Initialize to avoid scope issues
                 
                 # New token statistics
                 if valid_new_token_mask.sum() > 0:
@@ -267,7 +264,7 @@ class ActorPPOTrainer(ABC):
                         "new_token_usage_ratio": new_token_ratio,
                     })
                     
-                    # Calculate distribution statistics of new token entropy
+                    # Calculate distribution statistics of new token entropy (only if we have multiple tokens)
                     if valid_new_token_mask.sum() > 1:
                         new_token_entropy_values = entropy_for_actions[valid_new_token_mask.bool()]
                         stats.update({
@@ -297,7 +294,7 @@ class ActorPPOTrainer(ABC):
                     })
                     
                     # Calculate entropy difference between new and original tokens
-                    if valid_new_token_mask.sum() > 0:
+                    if valid_new_token_mask.sum() > 0 and avg_new_token_entropy is not None:
                         entropy_diff = avg_new_token_entropy - avg_original_entropy
                         stats["new_vs_original_entropy_diff"] = entropy_diff.item()
                 else:
@@ -307,26 +304,22 @@ class ActorPPOTrainer(ABC):
                         "original_token_usage_ratio": 0.0,
                     })
                 
-                # Calculate distribution of new token usage ratio per sample
-                if total_action_count > 0:
-                    sample_new_token_ratios = (valid_new_token_mask.sum(dim=1) / action_mask.sum(dim=1)).float()
+                # Calculate distribution of new token usage ratio per sample (simplified)
+                if total_action_count > 0 and valid_new_token_mask.sum() > 0:
+                    # Only calculate basic sample statistics to reduce computation
+                    sample_new_token_counts = valid_new_token_mask.sum(dim=1)
+                    sample_action_counts = action_mask.sum(dim=1)
+                    sample_ratios = sample_new_token_counts.float() / (sample_action_counts.float() + 1e-8)
+                    
                     stats.update({
-                        "avg_sample_new_token_ratio": sample_new_token_ratios.mean().item(),
-                        "max_sample_new_token_ratio": sample_new_token_ratios.max().item(),
-                        "min_sample_new_token_ratio": sample_new_token_ratios.min().item(),
+                        "avg_sample_new_token_ratio": sample_ratios.mean().item(),
                     })
                 
-                # Add some debug information (occasionally recorded)
+                # Simplified debug information (reduce frequency)
                 if hasattr(self, '_debug_counter'):
                     self._debug_counter += 1
                 else:
                     self._debug_counter = 1
-                
-                # Record detailed statistics every 1000 steps (only log, don't include in all_reduce)
-                if self._debug_counter % 1000 == 0 and valid_new_token_mask.sum() > 0:
-                    unique_new_tokens = torch.unique(action_tokens[valid_new_token_mask.bool()])
-                    # Use print instead of stats to avoid all_reduce issues
-                    print(f"[NewTokenMonitoring] Step {self._debug_counter}: {len(unique_new_tokens)} unique new tokens used")
         
         return stats
 
