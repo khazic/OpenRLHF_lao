@@ -1,5 +1,15 @@
 set -x
 
+export NCCL_TIMEOUT=1800
+export NCCL_IB_TIMEOUT=23
+export NCCL_IB_RETRY_CNT=7
+export NCCL_ASYNC_ERROR_HANDLING=1
+export NCCL_DEBUG=WARN
+export NCCL_DEBUG_SUBSYS=ALL
+export NCCL_SOCKET_IFNAME=eth0
+export NCCL_IB_DISABLE=1
+export NCCL_P2P_DISABLE=1
+
 if [ "$CONDA_DEFAULT_ENV" != "openrlhf" ]; then
     echo "Warning: conda environment is not openrlhf, current environment: $CONDA_DEFAULT_ENV"
     source /xfr_ceph_sh/liuchonghan/envs/etc/profile.d/conda.sh
@@ -21,7 +31,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --vllm_num_engines 4 \
    --vllm_tensor_parallel_size 4 \
    --vllm_gpu_memory_utilization 0.6 \
-   --init_kl_coef 1e-3 \
+   --init_kl_coef 0.0 \
    --gamma 1.0 \
    --colocate_all_models \
    --advantage_estimator group_norm \
@@ -48,7 +58,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --normalize_reward \
    --gradient_checkpointing \
    --packing_samples \
-   --vllm_sync_backend gloo \
+   --vllm_sync_backend nccl \
    --enforce_eager \
    --vllm_enable_sleep \
    --entropy_loss_coef 0.0 \
