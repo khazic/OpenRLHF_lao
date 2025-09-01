@@ -314,6 +314,15 @@ class ActorPPOTrainer(ABC):
                 entropy_for_actions = output.entropy[:, -experience.action_mask.shape[1]:]
                 sample_entropies = (entropy_for_actions * experience.action_mask).sum(dim=1) / experience.action_mask.sum(dim=1)
                 policy_entropy = sample_entropies.mean().item()
+                
+                action_lengths = experience.action_mask.sum(dim=1).float()
+                avg_action_length = action_lengths.mean().item()
+                max_action_length = action_lengths.max().item()
+                min_action_length = action_lengths.min().item()
+                
+                status["avg_action_length"] = avg_action_length
+                status["max_action_length"] = max_action_length 
+                status["min_action_length"] = min_action_length
             else:
                 policy_entropy = output.entropy.mean(dim=1).mean().item()
             
