@@ -1,5 +1,18 @@
 set -x
 
+# NCCL debugging and configuration
+export NCCL_DEBUG=INFO
+export NCCL_DEBUG_SUBSYS=ALL
+export NCCL_TIMEOUT=1800
+export NCCL_IB_DISABLE=0
+export NCCL_P2P_DISABLE=0
+# Try different network interfaces
+export NCCL_SOCKET_IFNAME=eth0
+export NCCL_IB_HCA=mlx5_0
+export NCCL_NET_GDR_LEVEL=5
+export NCCL_NET_DNS_OVERRIDE=1
+export NCCL_NET_GDR_READ=1
+
 if [ "$CONDA_DEFAULT_ENV" != "openrlhf" ]; then
     echo "Warning: conda environment is not openrlhf, current environment: $CONDA_DEFAULT_ENV"
     source /xfr_ceph_sh/liuchonghan/envs/etc/profile.d/conda.sh
