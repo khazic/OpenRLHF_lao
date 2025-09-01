@@ -237,7 +237,8 @@ class ActorPPOTrainer(ABC):
                     new_token_mask = (action_tokens >= self.original_vocab_size).float()
                 else:
                     # Cannot determine new tokens, skip monitoring
-                    return {"error": "Cannot determine new tokens without config or vocab size"}
+                    print("[NewTokenMonitoring] Warning: Cannot determine new tokens without config or vocab size")
+                    return {}
                 
                 # Valid new token mask (considering action_mask)
                 valid_new_token_mask = new_token_mask * action_mask
@@ -321,10 +322,11 @@ class ActorPPOTrainer(ABC):
                 else:
                     self._debug_counter = 1
                 
-                # Record detailed statistics every 1000 steps
+                # Record detailed statistics every 1000 steps (only log, don't include in all_reduce)
                 if self._debug_counter % 1000 == 0 and valid_new_token_mask.sum() > 0:
                     unique_new_tokens = torch.unique(action_tokens[valid_new_token_mask.bool()])
-                    stats["debug_unique_new_tokens_used"] = len(unique_new_tokens)
+                    # Use print instead of stats to avoid all_reduce issues
+                    print(f"[NewTokenMonitoring] Step {self._debug_counter}: {len(unique_new_tokens)} unique new tokens used")
         
         return stats
 

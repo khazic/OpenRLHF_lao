@@ -24,8 +24,6 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --init_kl_coef 1e-3 \
    --gamma 1.0 \
    --colocate_all_models \
-   --use_kl_loss \
-   --kl_estimator k2 \
    --advantage_estimator group_norm \
    --pretrain /xfr_ceph_sh/liuchonghan/checkpoints_set/S0825 \
    --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0831_last \
@@ -66,3 +64,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo_paper \
    --wandb_run_name Latest_grpo
+
+
+#    --use_kl_loss \
+#    --kl_estimator k2 \
