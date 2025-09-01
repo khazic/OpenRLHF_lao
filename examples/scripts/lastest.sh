@@ -30,11 +30,11 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --save_path ./paper_checkpoint/Latest_grpo \
    --ckpt_path ./paper_checkpoint/Latest_grpo_ckpt \
    --save_hf_ckpt \
-   --rollout_batch_size 64 \
-   --n_samples_per_prompt 8 \
-   --train_batch_size 64 \
-   --micro_train_batch_size 4 \
-   --micro_rollout_batch_size 8 \
+   --rollout_batch_size 32 \
+   --n_samples_per_prompt 4 \
+   --train_batch_size 32 \
+   --micro_train_batch_size 2 \
+   --micro_rollout_batch_size 4 \
    --max_epochs 1 \
    --prompt_max_len 4096 \
    --max_samples 500000 \
@@ -48,7 +48,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --normalize_reward \
    --gradient_checkpointing \
    --packing_samples \
-   --vllm_sync_backend nccl \
+   --vllm_sync_backend gloo \
    --enforce_eager \
    --vllm_enable_sleep \
    --entropy_loss_coef 0.0 \
@@ -62,7 +62,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --tokenizer_config_path /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/tokenizer_config_added.json \
    --auto_detect_original_vocab \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
-   --wandb_project 360_Repo_paper \
+   --wandb_project 360_Repo \
    --wandb_run_name Latest_grpo
 
 
