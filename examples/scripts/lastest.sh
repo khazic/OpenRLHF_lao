@@ -59,7 +59,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --freezing_actor_steps 20 \
    --enable_new_token_monitoring \
    --lr_warmup_ratio 0.1 \
-   --tokenizer_config_path ../../tokenizer_config_added.json \
+   --tokenizer_config_path /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/tokenizer_config_added.json \
    --auto_detect_original_vocab \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo_paper \
