@@ -382,6 +382,22 @@ if __name__ == "__main__":
         default=0.0005,
         help="Entropy variance regularization coefficient, penalizes inconsistent entropy across samples"
     )
+    parser.add_argument(
+        "--tokenizer_config_path",
+        type=str,
+        default=None,
+        help="Path to tokenizer config JSON file containing added_tokens_decoder for new token monitoring"
+    )
+    parser.add_argument(
+        "--auto_detect_original_vocab",
+        action="store_true",
+        help="Automatically detect original vocabulary size from tokenizer config"
+    )
+    parser.add_argument(
+        "--enable_new_token_monitoring",
+        action="store_true",
+        help="Enable comprehensive monitoring of newly added tokens during RL training"
+    )
     parser.add_argument("--adam_betas", type=float, nargs=2, default=(0.9, 0.95), help="Betas for Adam optimizer")
     parser.add_argument("--reward_clip_range", type=float, nargs=2, default=(-10, 10), help="Reward clip range")
 

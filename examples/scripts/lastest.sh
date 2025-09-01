@@ -32,15 +32,15 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --save_path ./paper_checkpoint/Latest_grpo \
    --ckpt_path ./paper_checkpoint/Latest_grpo_ckpt \
    --save_hf_ckpt \
-   --rollout_batch_size 128 \
-   --n_samples_per_prompt 16 \
-   --train_batch_size 128 \
-   --micro_train_batch_size 8 \
-   --micro_rollout_batch_size 16 \
+   --rollout_batch_size 64 \
+   --n_samples_per_prompt 8 \
+   --train_batch_size 64 \
+   --micro_train_batch_size 4 \
+   --micro_rollout_batch_size 8 \
    --max_epochs 1 \
    --prompt_max_len 4096 \
-   --max_samples 50000 \
-   --generate_max_len 4096 \
+   --max_samples 500000 \
+   --generate_max_len 2048 \
    --zero_stage 3 \
    --bf16 \
    --actor_learning_rate 5e-7 \
@@ -55,7 +55,14 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --vllm_enable_sleep \
    --entropy_loss_coef 0.0 \
    --entropy_var_coef 0.0 \
+   --temperature 0.7 \
+   --top_p 0.9 \
    --deepspeed_enable_sleep \
+   --freezing_actor_steps 20 \
+   --enable_new_token_monitoring \
+   --lr_warmup_ratio 0.1 \
+   --tokenizer_config_path ../../tokenizer_config_added.json \
+   --auto_detect_original_vocab \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo_paper \
    --wandb_run_name Latest_grpo

@@ -96,6 +96,12 @@ class ActorPPOTrainer(ABC):
         if backend == "nccl" and self.args.colocate_all_models and not self.args.async_train:
             self.use_cuda_ipc = True
 
+        # Initialize new token monitoring
+        self.new_token_ids = None
+        self.original_vocab_size = None
+        if getattr(self.args, 'enable_new_token_monitoring', False):
+            self._initialize_new_token_monitoring()
+
         # Create torch group with deepspeed rank 0 and all vllm ranks
         # to update vllm engine's weights after each training stage.
         #
@@ -148,6 +154,179 @@ class ActorPPOTrainer(ABC):
             ray.get(refs)
 
         torch_dist_barrier_and_cuda_sync()
+
+    def _initialize_new_token_monitoring(self):
+        """Initialize new token monitoring from tokenizer config"""
+        import json
+        
+        if hasattr(self.args, 'tokenizer_config_path') and self.args.tokenizer_config_path:
+            try:
+                with open(self.args.tokenizer_config_path, 'r') as f:
+                    tokenizer_config = json.load(f)
+                
+                if 'added_tokens_decoder' in tokenizer_config:
+                    # Extract all new token IDs from the config
+                    added_token_ids = [int(token_id) for token_id in tokenizer_config['added_tokens_decoder'].keys()]
+                    
+                    # Auto-detect original vocab size: find the minimum ID in added tokens
+                    if getattr(self.args, 'auto_detect_original_vocab', False):
+                        self.original_vocab_size = min(added_token_ids)
+                        print(f"[NewTokenMonitoring] Auto-detected original vocab size: {self.original_vocab_size}")
+                    else:
+                        # Use heuristic method: find the starting point of consecutive new tokens
+                        added_token_ids.sort()
+                        
+                        # Look for the first large gap, which is usually the end of the original vocabulary
+                        for i in range(1, len(added_token_ids)):
+                            gap = added_token_ids[i] - added_token_ids[i-1]
+                            if gap > 1000:  # If gap > 1000, consider this as vocabulary boundary
+                                self.original_vocab_size = added_token_ids[i]
+                                break
+                        
+                        # If no obvious gap found, use conservative estimation
+                        if self.original_vocab_size is None:
+                            # Assume consecutive large blocks of tokens are newly added
+                            potential_starts = [151643, 32000, 50257]  # Common base vocabulary sizes
+                            for start in potential_starts:
+                                if any(tid >= start for tid in added_token_ids):
+                                    self.original_vocab_size = start
+                                    break
+                            
+                            if self.original_vocab_size is None:
+                                self.original_vocab_size = min(added_token_ids)
+                        
+                        print(f"[NewTokenMonitoring] Estimated original vocab size: {self.original_vocab_size}")
+                    
+                    # All added tokens are new tokens (since chat model already contains expanded vocabulary)
+                    self.new_token_ids = added_token_ids
+                    
+                    print(f"[NewTokenMonitoring] Monitoring {len(self.new_token_ids)} added tokens")
+                    print(f"[NewTokenMonitoring] Token ID range: {min(self.new_token_ids)} - {max(self.new_token_ids)}")
+                else:
+                    print("[NewTokenMonitoring] No added_tokens_decoder found in tokenizer config")
+            except Exception as e:
+                print(f"[NewTokenMonitoring] Error loading tokenizer config: {e}")
+        else:
+            print("[NewTokenMonitoring] No tokenizer config provided, new token monitoring disabled")
+            self.new_token_ids = []
+
+    def _compute_new_token_entropy_stats(self, output, experience):
+        """Compute detailed entropy statistics for newly added tokens"""
+        if not getattr(self.args, 'enable_new_token_monitoring', False):
+            return {}
+            
+        stats = {}
+        
+        if hasattr(experience, 'action_mask') and experience.action_mask is not None and hasattr(output, 'entropy'):
+            entropy_for_actions = output.entropy[:, -experience.action_mask.shape[1]:]
+            action_mask = experience.action_mask
+            
+            if hasattr(experience, 'sequences'):
+                sequences = experience.sequences
+                action_len = action_mask.shape[1]
+                action_tokens = sequences[:, -action_len:]  # [batch_size, action_len]
+                
+                # Determine the ID range of new tokens
+                if self.new_token_ids is not None and len(self.new_token_ids) > 0:
+                    # Use token list loaded from tokenizer config (cache tensor to avoid repeated creation)
+                    if not hasattr(self, '_new_token_tensor') or self._new_token_tensor.device != action_tokens.device:
+                        self._new_token_tensor = torch.tensor(self.new_token_ids, device=action_tokens.device)
+                    new_token_mask = torch.isin(action_tokens, self._new_token_tensor).float()
+                elif self.original_vocab_size is not None:
+                    # Use fallback: all tokens >= original_vocab_size
+                    new_token_mask = (action_tokens >= self.original_vocab_size).float()
+                else:
+                    # Cannot determine new tokens, skip monitoring
+                    return {"error": "Cannot determine new tokens without config or vocab size"}
+                
+                # Valid new token mask (considering action_mask)
+                valid_new_token_mask = new_token_mask * action_mask
+                
+                # Original token mask (ensure original_vocab_size exists)
+                if self.original_vocab_size is not None:
+                    original_token_mask = (action_tokens < self.original_vocab_size).float()
+                    valid_original_mask = original_token_mask * action_mask
+                else:
+                    # If cannot determine original vocab size, set to zero mask
+                    valid_original_mask = torch.zeros_like(action_mask)
+                
+                total_action_count = action_mask.sum().item()
+                
+                # New token statistics
+                if valid_new_token_mask.sum() > 0:
+                    new_token_entropies = entropy_for_actions * valid_new_token_mask
+                    avg_new_token_entropy = new_token_entropies.sum() / valid_new_token_mask.sum()
+                    
+                    new_token_count = valid_new_token_mask.sum().item()
+                    new_token_ratio = new_token_count / total_action_count if total_action_count > 0 else 0
+                    
+                    stats.update({
+                        "new_token_entropy": avg_new_token_entropy.item(),
+                        "new_token_count": new_token_count,
+                        "new_token_usage_ratio": new_token_ratio,
+                    })
+                    
+                    # Calculate distribution statistics of new token entropy
+                    if valid_new_token_mask.sum() > 1:
+                        new_token_entropy_values = entropy_for_actions[valid_new_token_mask.bool()]
+                        stats.update({
+                            "new_token_entropy_std": new_token_entropy_values.std().item(),
+                            "new_token_entropy_min": new_token_entropy_values.min().item(),
+                            "new_token_entropy_max": new_token_entropy_values.max().item(),
+                        })
+                else:
+                    stats.update({
+                        "new_token_entropy": 0.0,
+                        "new_token_count": 0,
+                        "new_token_usage_ratio": 0.0,
+                    })
+                
+                # Original token statistics (for comparison)
+                if valid_original_mask.sum() > 0:
+                    original_entropies = entropy_for_actions * valid_original_mask
+                    avg_original_entropy = original_entropies.sum() / valid_original_mask.sum()
+                    
+                    original_count = valid_original_mask.sum().item()
+                    original_ratio = original_count / total_action_count if total_action_count > 0 else 0
+                    
+                    stats.update({
+                        "original_token_entropy": avg_original_entropy.item(),
+                        "original_token_count": original_count,
+                        "original_token_usage_ratio": original_ratio,
+                    })
+                    
+                    # Calculate entropy difference between new and original tokens
+                    if valid_new_token_mask.sum() > 0:
+                        entropy_diff = avg_new_token_entropy - avg_original_entropy
+                        stats["new_vs_original_entropy_diff"] = entropy_diff.item()
+                else:
+                    stats.update({
+                        "original_token_entropy": 0.0,
+                        "original_token_count": 0,
+                        "original_token_usage_ratio": 0.0,
+                    })
+                
+                # Calculate distribution of new token usage ratio per sample
+                if total_action_count > 0:
+                    sample_new_token_ratios = (valid_new_token_mask.sum(dim=1) / action_mask.sum(dim=1)).float()
+                    stats.update({
+                        "avg_sample_new_token_ratio": sample_new_token_ratios.mean().item(),
+                        "max_sample_new_token_ratio": sample_new_token_ratios.max().item(),
+                        "min_sample_new_token_ratio": sample_new_token_ratios.min().item(),
+                    })
+                
+                # Add some debug information (occasionally recorded)
+                if hasattr(self, '_debug_counter'):
+                    self._debug_counter += 1
+                else:
+                    self._debug_counter = 1
+                
+                # Record detailed statistics every 1000 steps
+                if self._debug_counter % 1000 == 0 and valid_new_token_mask.sum() > 0:
+                    unique_new_tokens = torch.unique(action_tokens[valid_new_token_mask.bool()])
+                    stats["debug_unique_new_tokens_used"] = len(unique_new_tokens)
+        
+        return stats
 
     def ppo_train(self, kl_ctl: float):
         # replay buffer may be empty at first, we should rebuild at each training
@@ -329,6 +508,10 @@ class ActorPPOTrainer(ABC):
             status["token_entropy"] = token_entropy
             status["sequence_entropy"] = sequence_entropy
             status["policy_entropy"] = policy_entropy
+
+        # Add entropy monitoring for new tokens
+        new_token_stats = self._compute_new_token_entropy_stats(output, experience)
+        status.update(new_token_stats)
 
         # merge logs from info field
         for k, v in experience.info.items():
