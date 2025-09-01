@@ -7,15 +7,22 @@ export NCCL_TIMEOUT=1800
 export NCCL_IB_DISABLE=0
 export NCCL_P2P_DISABLE=0
 # Try different network interfaces
-export NCCL_SOCKET_IFNAME=^lo,docker
+export NCCL_SOCKET_IFNAME=ibs22
+export NCCL_IB_GID_INDEX=3
 export NCCL_IB_HCA=mlx5_0
-export NCCL_NET_GDR_LEVEL=5
+export NCCL_NET_GDR_LEVEL=4
+export NCCL_IB_QPS_PER_CONNECTION=4
+export NCCL_IB_TC=106
+export NCCL_IB_TIMEOUT=22
+export NCCL_PXN_DISABLE=0
+export NCCL_MIN_CTAS=4
 export NCCL_NET_DNS_OVERRIDE=1
 export NCCL_NET_GDR_READ=1
 export NCCL_PROTO=Simple
 export NCCL_ALGO=Ring
 export NCCL_MIN_NRINGS=1
 export NCCL_MAX_NRINGS=4
+export CUDA_DEVICE_MAX_CONNECTIONS=1
 
 if [ "$CONDA_DEFAULT_ENV" != "openrlhf" ]; then
     echo "Warning: conda environment is not openrlhf, current environment: $CONDA_DEFAULT_ENV"
