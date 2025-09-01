@@ -9,6 +9,9 @@ export NCCL_DEBUG_SUBSYS=ALL
 export NCCL_SOCKET_IFNAME=eth0
 export NCCL_IB_DISABLE=1
 export NCCL_P2P_DISABLE=1
+export NCCL_BLOCKING_WAIT=1
+export NCCL_ASYNC_ERROR_HANDLING=0
+export TORCH_NCCL_ASYNC_ERROR_HANDLING=0
 
 if [ "$CONDA_DEFAULT_ENV" != "openrlhf" ]; then
     echo "Warning: conda environment is not openrlhf, current environment: $CONDA_DEFAULT_ENV"
@@ -51,6 +54,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --generate_max_len 2048 \
    --zero_stage 3 \
    --bf16 \
+   --deepspeed_backend gloo \
    --actor_learning_rate 5e-7 \
    --prompt_data /xfr_ceph_sh/liuchonghan/prompt_dataset \
    --input_key context_messages \
@@ -58,7 +62,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --normalize_reward \
    --gradient_checkpointing \
    --packing_samples \
-   --vllm_sync_backend nccl \
+   --vllm_sync_backend gloo \
    --enforce_eager \
    --vllm_enable_sleep \
    --entropy_loss_coef 0.0 \
