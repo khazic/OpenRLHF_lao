@@ -28,11 +28,11 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --advantage_estimator group_norm \
    --pretrain /xfr_ceph_sh/liuchonghan/checkpoints_set/S0825 \
    --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0831_last \
-   --save_path ./paper_checkpoint/Latest_grpo \
-   --ckpt_path ./paper_checkpoint/Latest_grpo_ckpt \
+   --save_path ./paper_checkpoint/Latest_grpo_0902 \
+   --ckpt_path ./paper_checkpoint/Latest_grpo_0902_ckpt \
    --save_hf_ckpt \
    --rollout_batch_size 32 \
-   --n_samples_per_prompt 4 \
+   --n_samples_per_prompt 8 \
    --train_batch_size 32 \
    --micro_train_batch_size 2 \
    --micro_rollout_batch_size 4 \
@@ -45,7 +45,6 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --actor_learning_rate 5e-7 \
    --prompt_data /xfr_ceph_sh/liuchonghan/prompt_dataset \
    --input_key context_messages \
-   --apply_chat_template \
    --normalize_reward \
    --gradient_checkpointing \
    --packing_samples \
@@ -64,8 +63,9 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --auto_detect_original_vocab \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo \
-   --wandb_run_name Latest_grpo
+   --wandb_run_name Latest_grpo_0902
 
 
 #    --use_kl_loss \
 #    --kl_estimator k2 \
+#   --apply_chat_template \
