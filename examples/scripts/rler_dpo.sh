@@ -34,13 +34,14 @@ openrlhf.cli.train_dpo \
    --save_path ./checkpoint/rler_dpo \
    --save_steps -1 \
    --logging_steps 2 \
-   --eval_steps 100 \
+   --eval_steps 1000 \
    --train_batch_size 512 \
    --micro_train_batch_size 4 \
    --pretrain /xfr_ceph_sh/liuchonghan/checkpoints_set/S0825 \
    --bf16 \
    --max_epochs 1 \
    --max_len 8192 \
+   --max_samples 10000000 \
    --zero_stage 3 \
    --learning_rate 3e-6 \
    --beta 0.1 \
