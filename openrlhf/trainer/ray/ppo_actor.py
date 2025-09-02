@@ -232,31 +232,12 @@ class ActorPPOTrainer(ABC):
                     # Use range-based detection: all tokens >= original_vocab_size
                     new_token_mask = (action_tokens >= self.original_vocab_size).float()
                     
-                    # Exclude special tokens (based on your tokenizer config)
+                    # Exclude special tokens efficiently (single range check)
                     # From tokenizer_config_added.json: 151643-151664 are special tokens
-                    special_token_ranges = [
-                        (151643, 151664),  # All special tokens: <|endoftext|>, <|im_start|>, <|im_end|>, etc.
-                    ]
-                    
-                    # Create mask to exclude special tokens
-                    special_token_mask = torch.zeros_like(action_tokens, dtype=torch.bool)
-                    for start_id, end_id in special_token_ranges:
-                        special_token_mask |= (action_tokens >= start_id) & (action_tokens <= end_id)
+                    special_token_mask = (action_tokens >= 151643) & (action_tokens <= 151664)
                     
                     # Apply exclusion: new tokens but not special tokens
-                    original_new_count = new_token_mask.sum().item()
-                    special_count = special_token_mask.sum().item()
                     new_token_mask = new_token_mask * (~special_token_mask).float()
-                    filtered_new_count = new_token_mask.sum().item()
-                    
-                    # Debug info (print occasionally)
-                    if hasattr(self, '_filter_debug_counter'):
-                        self._filter_debug_counter += 1
-                    else:
-                        self._filter_debug_counter = 1
-                    
-                    if self._filter_debug_counter % 100 == 0:
-                        print(f"[NewTokenMonitoring] Token filtering: {original_new_count} -> {filtered_new_count} (excluded {special_count} special tokens)")
                     
                 else:
                     # Cannot determine new tokens, skip monitoring
@@ -331,22 +312,10 @@ class ActorPPOTrainer(ABC):
                         "original_token_usage_ratio": 0.0,
                     })
                 
-                # Calculate distribution of new token usage ratio per sample (simplified)
+                # Only calculate essential statistics to minimize computation
                 if total_action_count > 0 and valid_new_token_mask.sum() > 0:
-                    # Only calculate basic sample statistics to reduce computation
-                    sample_new_token_counts = valid_new_token_mask.sum(dim=1)
-                    sample_action_counts = action_mask.sum(dim=1)
-                    sample_ratios = sample_new_token_counts.float() / (sample_action_counts.float() + 1e-8)
-                    
-                    stats.update({
-                        "avg_sample_new_token_ratio": sample_ratios.mean().item(),
-                    })
-                
-                # Simplified debug information (reduce frequency)
-                if hasattr(self, '_debug_counter'):
-                    self._debug_counter += 1
-                else:
-                    self._debug_counter = 1
+                    avg_ratio = valid_new_token_mask.sum().item() / total_action_count
+                    stats["avg_sample_new_token_ratio"] = avg_ratio
         
         return stats
 
@@ -531,9 +500,17 @@ class ActorPPOTrainer(ABC):
             status["sequence_entropy"] = sequence_entropy
             status["policy_entropy"] = policy_entropy
 
-        # Add entropy monitoring for new tokens
-        new_token_stats = self._compute_new_token_entropy_stats(output, experience)
-        status.update(new_token_stats)
+        # Add entropy monitoring for new tokens (only if enabled and occasionally)
+        if getattr(self.args, 'enable_new_token_monitoring', False):
+            # Only compute every 10 steps to reduce overhead
+            if hasattr(self, '_monitor_step_counter'):
+                self._monitor_step_counter += 1
+            else:
+                self._monitor_step_counter = 1
+            
+            if self._monitor_step_counter % 10 == 0:
+                new_token_stats = self._compute_new_token_entropy_stats(output, experience)
+                status.update(new_token_stats)
 
         # merge logs from info field
         for k, v in experience.info.items():
