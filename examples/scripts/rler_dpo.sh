@@ -11,7 +11,7 @@ fi
 export PYTHONPATH=/xfr_ceph_sh/liuchonghan/OpenRLHF:$PYTHONPATH
 
 # Validate paths
-PRETRAIN_PATH="/xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0825"
+PRETRAIN_PATH="/xfr_ceph_sh/liuchonghan/checkpoints_set/S0825"
 DATASET_PATH="/xfr_ceph_sh/liuchonghan/tranlate_datset"
 
 if [ ! -d "$PRETRAIN_PATH" ]; then
