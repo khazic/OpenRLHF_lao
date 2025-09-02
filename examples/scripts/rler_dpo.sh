@@ -12,7 +12,7 @@ export PYTHONPATH=/xfr_ceph_sh/liuchonghan/OpenRLHF:$PYTHONPATH
 
 # Validate paths
 PRETRAIN_PATH="/xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0825"
-DATASET_PATH="/xfr_ceph_sh/liuchonghan/translate_dataset"
+DATASET_PATH="/xfr_ceph_sh/liuchonghan/tranlate_datset"
 
 if [ ! -d "$PRETRAIN_PATH" ]; then
     echo "Error: Pretrained model path does not exist: $PRETRAIN_PATH"
@@ -44,7 +44,7 @@ openrlhf.cli.train_dpo \
    --zero_stage 3 \
    --learning_rate 3e-6 \
    --beta 0.1 \
-   --dataset /xfr_ceph_sh/liuchonghan/tranlate_datset \
+   --dataset /xfr_ceph_sh/liuchonghan/translate_dataset \
    --chosen_key chosen \
    --rejected_key rejected \
    --attn_implementation flash_attention_2 \
