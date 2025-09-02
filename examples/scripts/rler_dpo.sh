@@ -35,7 +35,7 @@ openrlhf.cli.train_dpo \
    --save_steps -1 \
    --logging_steps 2 \
    --eval_steps 100 \
-   --train_batch_size 256 \
+   --train_batch_size 512 \
    --micro_train_batch_size 4 \
    --pretrain /xfr_ceph_sh/liuchonghan/checkpoints_set/S0825 \
    --bf16 \
