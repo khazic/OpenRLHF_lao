@@ -44,7 +44,7 @@ openrlhf.cli.train_dpo \
    --zero_stage 3 \
    --learning_rate 3e-6 \
    --beta 0.1 \
-   --dataset /xfr_ceph_sh/liuchonghan/translate_dataset \
+   --dataset /xfr_ceph_sh/liuchonghan/tranlate_datset \
    --chosen_key chosen \
    --rejected_key rejected \
    --attn_implementation flash_attention_2 \
