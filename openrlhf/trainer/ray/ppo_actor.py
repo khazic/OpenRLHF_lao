@@ -372,10 +372,20 @@ class ActorPPOTrainer(ABC):
                 pbar.set_postfix(short_status)
 
         if status_list:
-            status_mean = status_list[0]
-            for m in status_list[1:]:
-                for k, v in m.items():
-                    status_mean[k] += v
+            # Collect all keys from all status dictionaries
+            all_keys = set()
+            for status in status_list:
+                all_keys.update(status.keys())
+            
+            # Initialize status_mean with all keys, using 0 as default
+            status_mean = {k: 0.0 for k in all_keys}
+            
+            # Sum up values for each key
+            for status in status_list:
+                for k in all_keys:
+                    status_mean[k] += status.get(k, 0.0)
+            
+            # Calculate mean
             for k in status_mean.keys():
                 status_mean[k] /= len(status_list)
         return status_mean
