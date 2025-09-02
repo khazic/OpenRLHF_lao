@@ -231,6 +231,33 @@ class ActorPPOTrainer(ABC):
                 if self.original_vocab_size is not None:
                     # Use range-based detection: all tokens >= original_vocab_size
                     new_token_mask = (action_tokens >= self.original_vocab_size).float()
+                    
+                    # Exclude special tokens (based on your tokenizer config)
+                    # From tokenizer_config_added.json: 151643-151664 are special tokens
+                    special_token_ranges = [
+                        (151643, 151664),  # All special tokens: <|endoftext|>, <|im_start|>, <|im_end|>, etc.
+                    ]
+                    
+                    # Create mask to exclude special tokens
+                    special_token_mask = torch.zeros_like(action_tokens, dtype=torch.bool)
+                    for start_id, end_id in special_token_ranges:
+                        special_token_mask |= (action_tokens >= start_id) & (action_tokens <= end_id)
+                    
+                    # Apply exclusion: new tokens but not special tokens
+                    original_new_count = new_token_mask.sum().item()
+                    special_count = special_token_mask.sum().item()
+                    new_token_mask = new_token_mask * (~special_token_mask).float()
+                    filtered_new_count = new_token_mask.sum().item()
+                    
+                    # Debug info (print occasionally)
+                    if hasattr(self, '_filter_debug_counter'):
+                        self._filter_debug_counter += 1
+                    else:
+                        self._filter_debug_counter = 1
+                    
+                    if self._filter_debug_counter % 100 == 0:
+                        print(f"[NewTokenMonitoring] Token filtering: {original_new_count} -> {filtered_new_count} (excluded {special_count} special tokens)")
+                    
                 else:
                     # Cannot determine new tokens, skip monitoring
                     print("[NewTokenMonitoring] Warning: Cannot determine new tokens without vocab size")

@@ -55,6 +55,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --entropy_var_coef 0.0 \
    --temperature 0.7 \
    --top_p 0.9 \
+   --apply_chat_template \
    --deepspeed_enable_sleep \
    --freezing_actor_steps 20 \
    --enable_new_token_monitoring \
@@ -68,4 +69,3 @@ python3 -m openrlhf.cli.train_ppo_ray \
 
 #    --use_kl_loss \
 #    --kl_estimator k2 \
-#   --apply_chat_template \
