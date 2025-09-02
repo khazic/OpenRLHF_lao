@@ -29,7 +29,7 @@ openrlhf.cli.train_rm \
    --eval_steps 100 \
    --train_batch_size 128 \
    --micro_train_batch_size 2 \
-   --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0825 \
+   --pretrain /xfr_ceph_sh/liuchonghan/checkpoints_set/S0825 \
    --bf16 \
    --max_epochs 1 \
    --max_len 8192 \
