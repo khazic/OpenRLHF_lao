@@ -24,8 +24,8 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --vllm_gpu_memory_utilization 0.6 \
    --colocate_all_models \
    --advantage_estimator xpo \
-   --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
-   --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_Qwen_0825_translate \
+   --pretrain /xfr_ceph_sh/liuchonghan/checkpoints_set/S0825 \
+   --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0902_translate \
    --save_path ./paper_checkpoint/paper_xpo_main_k3 \
    --ckpt_path ./paper_checkpoint/paper_xpo_main_k3_ckpt \
    --save_hf_ckpt \
@@ -36,14 +36,13 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --micro_rollout_batch_size 8 \
    --max_epochs 1 \
    --prompt_max_len 4096 \
-   --max_samples 50000 \
+   --max_samples 500000 \
    --generate_max_len 4096 \
    --zero_stage 3 \
    --bf16 \
    --actor_learning_rate 5e-7 \
    --prompt_data /xfr_ceph_sh/liuchonghan/prompt_dataset \
    --input_key context_messages \
-   --apply_chat_template \
    --normalize_reward \
    --gradient_checkpointing \
    --packing_samples \

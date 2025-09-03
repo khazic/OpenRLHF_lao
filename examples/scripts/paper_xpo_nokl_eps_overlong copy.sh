@@ -24,10 +24,10 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --vllm_gpu_memory_utilization 0.6 \
    --colocate_all_models \
    --advantage_estimator xpo \
-   --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
-   --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_Qwen_0825_translate \
-   --save_path ./paper_checkpoint/paper_xpo_main_nokl_es \
-   --ckpt_path ./paper_checkpoint/paper_xpo_main_nokl_es_ckpt \
+   --pretrain /xfr_ceph_sh/liuchonghan/checkpoints_set/S0825 \
+   --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0902_translate \
+   --save_path ./paper_checkpoint/paper_xpo_main_nokl_eps_overlong \
+   --ckpt_path ./paper_checkpoint/paper_xpo_main_nokl_eps_overlong_ckpt \
    --save_hf_ckpt \
    --rollout_batch_size 128 \
    --n_samples_per_prompt 16 \
@@ -36,19 +36,18 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --micro_rollout_batch_size 8 \
    --max_epochs 1 \
    --prompt_max_len 4096 \
-   --max_samples 50000 \
+   --max_samples 500000 \
    --generate_max_len 4096 \
    --zero_stage 3 \
    --bf16 \
    --actor_learning_rate 5e-7 \
    --prompt_data /xfr_ceph_sh/liuchonghan/prompt_dataset \
    --input_key context_messages \
-   --apply_chat_template \
    --normalize_reward \
    --gradient_checkpointing \
    --packing_samples \
    --vllm_sync_backend nccl \
-   --eps_clip_low_high 0.15 0.25 \
+   --eps_clip_low_high 0.2 0.28 \
    --enforce_eager \
    --vllm_enable_sleep \
    --use_kl_loss \
@@ -56,13 +55,8 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --deepspeed_enable_sleep \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo_paper \
-   --wandb_run_name paper_xpo_main_nokl_es
-
-
-#    --overlong_penalty_factor 0.5 \
-#    --overlong_buffer_len 256 \
-#    --kl_estimator k2 \
-#    --use_kl_loss \
-#    --entropy_loss_coef 0.005 \
+   --wandb_run_name paper_xpo_main_nokl_eps_overlong \
+   --overlong_penalty_factor 0.1 \
+   --overlong_buffer_len 3072
 
 

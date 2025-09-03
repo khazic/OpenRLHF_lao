@@ -26,8 +26,8 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --advantage_estimator xpo \
    --pretrain /xfr_ceph_sh/liuchonghan/checkpoints_set/S0825 \
    --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0902_translate \
-   --save_path ./paper_checkpoint/paper_xpo_main_k2 \
-   --ckpt_path ./paper_checkpoint/paper_xpo_main_k2_ckpt \
+   --save_path ./paper_checkpoint/paper_xpo_main_nokl_eps \
+   --ckpt_path ./paper_checkpoint/paper_xpo_main_nokl_eps_ckpt \
    --save_hf_ckpt \
    --rollout_batch_size 128 \
    --n_samples_per_prompt 16 \
@@ -47,22 +47,14 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --gradient_checkpointing \
    --packing_samples \
    --vllm_sync_backend nccl \
+   --eps_clip_low_high 0.2 0.28 \
    --enforce_eager \
    --vllm_enable_sleep \
    --use_kl_loss \
-   --init_kl_coef 1e-3 \
-   --kl_estimator k2 \
+   --init_kl_coef 0.0 \
    --deepspeed_enable_sleep \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo_paper \
-   --wandb_run_name paper_xpo_main_k2
-
-
-#    --overlong_penalty_factor 0.5 \
-#    --overlong_buffer_len 256 \
-#    --kl_estimator k2 \
-#    --use_kl_loss \
-#    --eps_clip_low_high 0.15 0.25 \
-#    --entropy_loss_coef 0.005 \
+   --wandb_run_name paper_xpo_main_nokl_eps
 
 
