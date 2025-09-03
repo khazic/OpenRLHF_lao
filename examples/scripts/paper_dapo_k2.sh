@@ -33,17 +33,18 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --save_path ./paper_checkpoint/paper_dapo_main_k2 \
    --ckpt_path ./paper_checkpoint/paper_dapo_main_k2_ckpt \
    --save_hf_ckpt \
-   --rollout_batch_size 64 \
-   --n_samples_per_prompt 8 \
-   --train_batch_size 64 \
-   --micro_train_batch_size 4 \
-   --micro_rollout_batch_size 8 \
+   --rollout_batch_size 128 \
+   --n_samples_per_prompt 16 \
+   --train_batch_size 128 \
+   --micro_train_batch_size 8 \
+   --micro_rollout_batch_size 16 \
    --max_epochs 1 \
    --prompt_max_len 4096 \
    --max_samples 500000 \
    --generate_max_len 4096 \
    --zero_stage 3 \
    --bf16 \
+   --apply_chat_template \
    --actor_learning_rate 5e-7 \
    --prompt_data /xfr_ceph_sh/liuchonghan/prompt_dataset \
    --input_key context_messages \
