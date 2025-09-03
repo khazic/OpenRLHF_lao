@@ -24,7 +24,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --vllm_gpu_memory_utilization 0.6 \
    --colocate_all_models \
    --advantage_estimator xpo \
-   --pretrain /xfr_ceph_sh/liuchonghan/checkpoints_set/S0825 \
+   --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
    --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0902_translate \
    --save_path ./paper_checkpoint/paper_xpo_main_nokl_eps \
    --ckpt_path ./paper_checkpoint/paper_xpo_main_nokl_eps_ckpt \
