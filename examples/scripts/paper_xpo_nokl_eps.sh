@@ -29,10 +29,10 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --save_path ./paper_checkpoint/paper_xpo_main_nokl_eps \
    --ckpt_path ./paper_checkpoint/paper_xpo_main_nokl_eps_ckpt \
    --save_hf_ckpt \
-   --rollout_batch_size 128 \
-   --n_samples_per_prompt 16 \
-   --train_batch_size 256 \
-   --micro_train_batch_size 16 \
+   --rollout_batch_size 64 \
+   --n_samples_per_prompt 8 \
+   --train_batch_size 64 \
+   --micro_train_batch_size 4 \
    --micro_rollout_batch_size 8 \
    --max_epochs 1 \
    --prompt_max_len 4096 \
