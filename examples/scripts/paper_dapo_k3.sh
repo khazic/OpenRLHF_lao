@@ -7,7 +7,6 @@ if [ "$CONDA_DEFAULT_ENV" != "openrlhf" ]; then
 fi
 
 export PYTHONPATH=/xfr_ceph_sh/liuchonghan/OpenRLHF:$PYTHONPATH
-export CUDA_VISIBLE_DEVICES=4,5,6,7
 
 if ! python3 -c "import ray" 2>/dev/null; then
     echo "Installing Ray..."
