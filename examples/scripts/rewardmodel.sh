@@ -26,8 +26,8 @@ openrlhf.cli.train_rm \
    --save_path ./checkpoint/RewardModel_0904_translate \
    --save_steps -1 \
    --logging_steps 2 \
-   --eval_steps 100 \
-   --train_batch_size 512 \
+   --eval_steps 200 \
+   --train_batch_size 64 \
    --micro_train_batch_size 4 \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
    --bf16 \
