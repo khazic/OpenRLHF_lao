@@ -12,15 +12,15 @@ if ! python3 -c "import ray" 2>/dev/null; then
     echo "Installing Ray..."
 fi
 python3 -m openrlhf.cli.train_ppo_ray \
-   --ref_num_nodes 2 \
-   --ref_num_gpus_per_node 8 \
-   --reward_num_nodes 2 \
-   --reward_num_gpus_per_node 8 \
-   --actor_num_nodes 2 \
-   --actor_num_gpus_per_node 8 \
-   --vllm_num_engines 4 \
+   --ref_num_nodes 1 \
+   --ref_num_gpus_per_node 4 \
+   --reward_num_nodes 0 \
+   --reward_num_gpus_per_node 0 \
+   --actor_num_nodes 1 \
+   --actor_num_gpus_per_node 4 \
+   --vllm_num_engines 1 \
    --vllm_tensor_parallel_size 4 \
-   --vllm_gpu_memory_utilization 0.6 \
+   --vllm_gpu_memory_utilization 0.4 \
    --init_kl_coef 1e-3 \
    --gamma 1.0 \
    --colocate_all_models \
@@ -28,7 +28,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --kl_estimator k3 \
    --advantage_estimator rloo \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
-   --reward_pretrain /xfr_ceph_sh/liuchonghan/Qwen_rm_72b/merged_rm8.52_gptpro-2model \
+   --remote_rm_url http://11.131.209.97:8000/reward \
    --save_path ./paper_checkpoint/paper_rloo_main_k3 \
    --ckpt_path ./paper_checkpoint/paper_rloo_main_k3_ckpt \
    --save_hf_ckpt \
@@ -43,6 +43,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --generate_max_len 4096 \
    --zero_stage 3 \
    --bf16 \
+   --apply_chat_template \
    --enable_new_token_monitoring \
    --tokenizer_config_path /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/tokenizer_config_added.json \
    --auto_detect_original_vocab \
