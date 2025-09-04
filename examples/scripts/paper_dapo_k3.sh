@@ -19,6 +19,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --reward_num_gpus_per_node 0 \
    --actor_num_nodes 1 \
    --actor_num_gpus_per_node 4 \
+   --colocate_actor_ref \
    --vllm_num_engines 1 \
    --vllm_tensor_parallel_size 4 \
    --vllm_gpu_memory_utilization 0.4 \
