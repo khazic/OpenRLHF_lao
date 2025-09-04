@@ -7,6 +7,7 @@ if [ "$CONDA_DEFAULT_ENV" != "openrlhf" ]; then
 fi
 
 export PYTHONPATH=/xfr_ceph_sh/liuchonghan/OpenRLHF:$PYTHONPATH
+export CUDA_VISIBLE_DEVICES=4,5,6,7
 
 if ! python3 -c "import ray" 2>/dev/null; then
     echo "Installing Ray..."
@@ -20,7 +21,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --actor_num_gpus_per_node 4 \
    --vllm_num_engines 1 \
    --vllm_tensor_parallel_size 4 \
-   --vllm_gpu_memory_utilization 0.4 \
+   --vllm_gpu_memory_utilization 0.6 \
    --init_kl_coef 1e-3 \
    --gamma 1.0 \
    --colocate_all_models \
