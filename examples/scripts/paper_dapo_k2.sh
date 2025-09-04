@@ -29,7 +29,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --advantage_estimator group_norm \
    --eps_clip_low_high 0.2 0.28 \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
-   --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0902_translate \
+   --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0904_translate_2 \
    --save_path ./paper_checkpoint/paper_dapo_main_k2 \
    --ckpt_path ./paper_checkpoint/paper_dapo_main_k2_ckpt \
    --save_hf_ckpt \
@@ -45,6 +45,9 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --zero_stage 3 \
    --bf16 \
    --apply_chat_template \
+   --enable_new_token_monitoring \
+   --tokenizer_config_path /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/tokenizer_config_added.json \
+   --auto_detect_original_vocab \
    --actor_learning_rate 5e-7 \
    --prompt_data /xfr_ceph_sh/liuchonghan/prompt_dataset \
    --input_key context_messages \
