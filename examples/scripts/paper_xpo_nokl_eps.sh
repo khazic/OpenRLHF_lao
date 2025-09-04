@@ -21,7 +21,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --actor_num_gpus_per_node 4 \
    --vllm_num_engines 1 \
    --vllm_tensor_parallel_size 4 \
-   --vllm_gpu_memory_utilization 0.4 \
+   --vllm_gpu_memory_utilization 0.7 \
    --colocate_all_models \
    --advantage_estimator xpo \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
