@@ -28,7 +28,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --kl_estimator k2 \
    --advantage_estimator reinforce_baseline \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
-   --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0902_translate \
+   --reward_pretrain /xfr_ceph_sh/liuchonghan/Qwen_rm_72b/merged_rm8.52_gptpro-2model \
    --save_path ./paper_checkpoint/paper_rplus_main_k2 \
    --ckpt_path ./paper_checkpoint/paper_rplus_main_k2_ckpt \
    --save_hf_ckpt \

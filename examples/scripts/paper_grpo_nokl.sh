@@ -27,7 +27,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --use_kl_loss \
    --advantage_estimator group_norm \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
-   --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0902_translate \
+   --reward_pretrain /xfr_ceph_sh/liuchonghan/Qwen_rm_72b/merged_rm8.52_gptpro-2model \
    --save_path ./paper_checkpoint/paper_grpo_main_nokl \
    --ckpt_path ./paper_checkpoint/paper_grpo_main_nokl_ckpt \
    --save_hf_ckpt \

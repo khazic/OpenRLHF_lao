@@ -29,7 +29,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --advantage_estimator group_norm \
    --eps_clip_low_high 0.2 0.28 \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
-   --reward_pretrain /llm-align/trlx_env/outputs/trlx-rm/rm-gptturbo-d7/merged_rm8.52_gptpro-2model \
+   --reward_pretrain /xfr_ceph_sh/liuchonghan/Qwen_rm_72b/merged_rm8.52_gptpro-2model \
    --save_path ./paper_checkpoint/paper_dapo_main_k2 \
    --ckpt_path ./paper_checkpoint/paper_dapo_main_k2_ckpt \
    --save_hf_ckpt \
