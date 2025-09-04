@@ -13,7 +13,7 @@ if ! python3 -c "import ray" 2>/dev/null; then
 fi
 python3 -m openrlhf.cli.train_ppo_ray \
    --ref_num_nodes 1 \
-   --ref_num_gpus_per_node 8 \
+   --ref_num_gpus_per_node 4 \
    --reward_num_nodes 0 \
    --reward_num_gpus_per_node 0 \
    --actor_num_nodes 1 \
