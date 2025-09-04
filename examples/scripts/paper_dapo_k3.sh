@@ -1,6 +1,8 @@
 set -x
 export CUDA_VISIBLE_DEVICES=4,5,6,7
 
+export RAY_DISABLE_IMPORT_WARNING=1
+
 if [ "$CONDA_DEFAULT_ENV" != "openrlhf" ]; then
     echo "Warning: conda environment is not openrlhf, current environment: $CONDA_DEFAULT_ENV"
     source /xfr_ceph_sh/liuchonghan/envs/etc/profile.d/conda.sh
@@ -20,6 +22,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --actor_num_nodes 1 \
    --actor_num_gpus_per_node 4 \
    --colocate_actor_ref \
+   --colocate_critic_reward \
    --vllm_num_engines 1 \
    --vllm_tensor_parallel_size 4 \
    --vllm_gpu_memory_utilization 0.4 \
