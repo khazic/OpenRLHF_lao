@@ -12,7 +12,6 @@ import logging
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# 全局变量
 model = None
 tokenizer = None
 
@@ -53,7 +52,6 @@ def get_rewards():
     try:
         data = request.get_json()
         
-        # 获取输入数据
         queries = data.get('query', [])
         prompts = data.get('prompts', [])
         labels = data.get('labels', [])
@@ -64,7 +62,7 @@ def get_rewards():
         
         rewards = []
         
-        batch_size = 8  # 根据GPU内存调整
+        batch_size = 8  
         for i in range(0, len(texts), batch_size):
             batch_texts = texts[i:i + batch_size]
             
@@ -73,19 +71,16 @@ def get_rewards():
                 batch_texts,
                 padding=True,
                 truncation=True,
-                max_length=4096,  # 根据模型支持的长度调整
+                max_length=4096, 
                 return_tensors="pt"
             )
             
-            # 移动到GPU（如果可用）
             if torch.cuda.is_available():
                 inputs = {k: v.cuda() for k, v in inputs.items()}
             
-            # 推理
             with torch.no_grad():
                 outputs = model(**inputs)
-                # 获取reward分数
-                scores = outputs.logits.squeeze(-1)  # [batch_size]
+                scores = outputs.logits.squeeze(-1)
                 rewards.extend(scores.cpu().tolist())
         
         print(f"Calculated rewards: min={min(rewards):.3f}, max={max(rewards):.3f}, mean={sum(rewards)/len(rewards):.3f}")
@@ -119,10 +114,9 @@ if __name__ == '__main__':
     
     load_model()
     
-    # 启动服务器
     app.run(
-        host='0.0.0.0',  # 监听所有网络接口
-        port=args.port,  # 端口号
-        debug=False,     # 生产环境关闭debug
-        threaded=True    # 支持多线程
+        host='0.0.0.0',
+        port=args.port,
+        debug=False,
+        threaded=True
     )
