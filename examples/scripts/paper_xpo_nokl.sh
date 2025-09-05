@@ -61,11 +61,4 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --wandb_run_name paper_xpo_main_nokl
 
 
-#    --overlong_penalty_factor 0.5 \
-#    --overlong_buffer_len 256 \
-#    --kl_estimator k2 \
-#    --use_kl_loss \
-#    --eps_clip_low_high 0.15 0.25 \
-#    --entropy_loss_coef 0.005 \
-
 
