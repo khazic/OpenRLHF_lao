@@ -26,10 +26,11 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --advantage_estimator xpo \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
    --remote_rm_url http://11.131.209.97:8000/reward \
-   --save_path ./paper_checkpoint/paper_xpo_main_nokl_eps \
-   --ckpt_path ./paper_checkpoint/paper_xpo_main_nokl_eps_ckpt \
+   --save_path ./paper_checkpoint/paper_xpo_main_nokl_eps_entropy \
+   --ckpt_path ./paper_checkpoint/paper_xpo_main_nokl_eps_entropy_ckpt \
    --save_hf_ckpt \
    --rollout_batch_size 64 \
+   --entropy_loss_coef 0.01 \
    --n_samples_per_prompt 8 \
    --train_batch_size 64 \
    --micro_train_batch_size 4 \
@@ -59,6 +60,6 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --deepspeed_enable_sleep \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo_paper \
-   --wandb_run_name paper_xpo_main_nokl_eps
+   --wandb_run_name paper_xpo_main_nokl_eps_entropy
 
 
