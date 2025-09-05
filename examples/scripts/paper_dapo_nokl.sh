@@ -8,12 +8,6 @@ fi
 
 export PYTHONPATH=/xfr_ceph_sh/liuchonghan/OpenRLHF:$PYTHONPATH
 
-# 禁用代理，直接连接远程奖励模型服务器
-unset http_proxy
-unset https_proxy
-unset HTTP_PROXY
-unset HTTPS_PROXY
-
 if ! python3 -c "import ray" 2>/dev/null; then
     echo "Installing Ray..."
 fi
@@ -43,7 +37,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --train_batch_size 64 \
    --micro_train_batch_size 4 \
    --micro_rollout_batch_size 8 \
-   --max_epochs 10 \
+   --max_epochs 1 \
    --prompt_max_len 4096 \
    --max_samples 10000 \
    --generate_max_len 4096 \
