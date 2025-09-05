@@ -22,15 +22,12 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --vllm_num_engines 2 \
    --vllm_tensor_parallel_size 4 \
    --vllm_gpu_memory_utilization 0.7 \
-   --init_kl_coef 1e-3 \
-   --entropy_loss_coef 0.01 \
-   --gamma 1.0 \
    --colocate_all_models \
    --advantage_estimator xpo \
    --pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/SFTmodel_0823 \
    --remote_rm_url http://11.131.209.97:8000/reward \
-   --save_path ./paper_checkpoint/paper_xpo_main_nokl_eps_overlong \
-   --ckpt_path ./paper_checkpoint/paper_xpo_main_nokl_eps_overlong_ckpt \
+   --save_path ./paper_checkpoint/paper_xpo_main_nokl_eps \
+   --ckpt_path ./paper_checkpoint/paper_xpo_main_nokl_eps_ckpt \
    --save_hf_ckpt \
    --rollout_batch_size 64 \
    --n_samples_per_prompt 8 \
@@ -62,9 +59,6 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --deepspeed_enable_sleep \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo_paper \
-   --wandb_run_name paper_xpo_main_nokl_eps_overlong \
-   --overlong_penalty_factor 0.5 \
-   --overlong_buffer_len 3072 
-
+   --wandb_run_name paper_xpo_main_nokl_eps
 
 

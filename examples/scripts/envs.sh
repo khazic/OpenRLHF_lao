@@ -23,7 +23,7 @@ export NCCL_SOCKET_IFNAME=eth0
 export NCCL_DEBUG_SUBSYS=ALL
 ray stop --force
 sleep 5
-ray start --address=11.131.243.187:6379 --num-cpus=96 --num-gpus=8
+ray start --address=11.131.250.118:6379 --num-cpus=96 --num-gpus=8
 
 
 
