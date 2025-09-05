@@ -8,6 +8,12 @@ fi
 
 export PYTHONPATH=/xfr_ceph_sh/liuchonghan/OpenRLHF:$PYTHONPATH
 
+# 禁用代理，直接连接远程奖励模型服务器
+unset http_proxy
+unset https_proxy
+unset HTTP_PROXY
+unset HTTPS_PROXY
+
 if ! python3 -c "import ray" 2>/dev/null; then
     echo "Installing Ray..."
 fi
