@@ -40,7 +40,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --micro_rollout_batch_size 8 \
    --max_epochs 1 \
    --prompt_max_len 4096 \
-   --max_samples 5000 \
+   --max_samples 10000 \
    --generate_max_len 4096 \
    --zero_stage 3 \
    --bf16 \

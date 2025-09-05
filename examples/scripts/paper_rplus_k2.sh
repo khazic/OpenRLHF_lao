@@ -39,7 +39,7 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --micro_rollout_batch_size 8 \
    --max_epochs 1 \
    --prompt_max_len 4096 \
-   --max_samples 5000 \
+   --max_samples 10000 \
    --generate_max_len 4096 \
    --zero_stage 3 \
    --bf16 \
@@ -61,10 +61,3 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --wandb_project 360_Repo_paper \
    --wandb_run_name paper_rplus_main_k2
 
-# --colocate_all_models with --async_train only merge the deepspeed models, not the vllm engines
-
-# You could also try
-#   --use_kl_loss \
-#   --kl_estimator k3 | k2 \
-
-# also supports --advantage_estimator rloo | reinforce_baseline
