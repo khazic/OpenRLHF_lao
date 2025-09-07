@@ -7,12 +7,11 @@ if [ "$CONDA_DEFAULT_ENV" != "openrlhf" ]; then
     conda activate openrlhf
 fi
 
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 export TOKENIZERS_PARALLELISM=false
 
 
 python3 remote_reward_server.py --port 8000 &
-python3 remote_reward_server.py --port 8001 &
 
 wait
 
