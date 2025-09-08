@@ -58,4 +58,4 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --deepspeed_enable_sleep \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
    --wandb_project 360_Repo_paper \
-   --wandb_run_name paper_grpo_main_nokl
+   --wandb_run_name paper_grpo_main_nokl_0908
