@@ -30,7 +30,7 @@ openrlhf.cli.train_sft \
    --train_batch_size 8192 \
    --input_key question \
    --output_key response \
-   --micro_train_batch_size 2 \
+   --micro_train_batch_size 6 \
    --max_samples 90000000 \
    --pretrain /llm-align/duyimin/duyimin/open_modle/Qwen2.5-7B-8Langs-CPT-250819 \
    --save_path ./checkpoint/RLer_0922 \
