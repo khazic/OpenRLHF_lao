@@ -18,7 +18,7 @@ export NCCL_DEBUG_SUBSYS=NONE
 
 export MASTER_ADDR=$(head -n 1 /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/hostfile.txt | awk '{print $1}')
 export MASTER_PORT=29501
-export WORLD_SIZE=16
+export WORLD_SIZE=24
 export LOCAL_RANK=0
 
 echo "🚀  Master node IP (auto-read from hostfile.txt): $MASTER_ADDR"
@@ -27,10 +27,10 @@ read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 4096 \
    --dataset /xfr_ceph_sh/liuchonghan/sft_translate_dataset/SFT_M_Translate_3.json \
-   --train_batch_size 8192 \
+   --train_batch_size 7680 \
    --input_key question \
    --output_key response \
-   --micro_train_batch_size 8 \
+   --micro_train_batch_size 16 \
    --max_samples 90000000 \
    --pretrain /llm-align/duyimin/duyimin/open_modle/Qwen2.5-7B-8Langs-CPT-250819 \
    --save_path ./checkpoint/RLer_0922 \
