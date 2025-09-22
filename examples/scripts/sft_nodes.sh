@@ -26,7 +26,7 @@ echo "🚀  Master node IP (auto-read from hostfile.txt): $MASTER_ADDR"
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 4096 \
-   --dataset /xfr_ceph_sh/liuchonghan/sft_translate_dataset \
+   --dataset /xfr_ceph_sh/liuchonghan/sft_translate_dataset/SFT_M_Translate_3.json \
    --train_batch_size 8192 \
    --input_key question \
    --output_key response \
