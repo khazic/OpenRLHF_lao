@@ -56,8 +56,8 @@ def blending_datasets(
             if ext == "jsonl":
                 ext = "json"
             if ext == "json":
-                # Use our error handling for JSON files
-                data = load_json_with_error_handling(dataset, strategy)
+                # Use our error handling for JSON files with auto-detection
+                data = load_json_with_error_handling(dataset, strategy, 'auto')
             else:
                 data = load_dataset(ext, data_files=dataset)
             strategy.print(f"loaded {dataset} with data_files={dataset}")
@@ -69,7 +69,7 @@ def blending_datasets(
             except Exception as e:
                 strategy.print(f"failed to load {dataset} from disk: {e}")
                 try:
-                    data = load_directory_with_error_handling(dataset, strategy)
+                    data = load_directory_with_error_handling(dataset, strategy, 'auto')
                     strategy.print(f"loaded {dataset} with error handling")
                 except Exception as e2:
                     data = load_dataset(dataset, data_dir=data_dir)
@@ -135,8 +135,37 @@ def _validate_reward_data_structure(data):
     return chosen_key is not None and rejected_key is not None
 
 
-def load_json_with_error_handling(file_path, strategy=None):
-    """Load JSON file, skip problematic samples"""
+def _validate_sft_data_structure(data):
+    """Validate if data contains correct SFT fields"""
+    if not isinstance(data, dict):
+        return False
+    
+    # Check for common SFT data formats
+    # Format 1: input/output keys
+    input_keys = ["input", "question", "prompt", "instruction", "query"]
+    output_keys = ["output", "response", "answer", "target", "completion"]
+    
+    # Format 2: conversation format
+    conversation_keys = ["conversation", "messages", "dialogue"]
+    
+    # Check if it has input/output structure
+    has_input = any(key in data and data[key] for key in input_keys)
+    has_output = any(key in data and data[key] for key in output_keys)
+    
+    # Check if it has conversation structure
+    has_conversation = any(key in data and data[key] for key in conversation_keys)
+    
+    return (has_input and has_output) or has_conversation
+
+
+def load_json_with_error_handling(file_path, strategy=None, data_type='auto'):
+    """Load JSON file, skip problematic samples
+    
+    Args:
+        file_path: Path to JSON file
+        strategy: Training strategy object
+        data_type: 'sft', 'reward', or 'auto' for automatic detection
+    """
     valid_data = []
     total_count = 0
     valid_count = 0
@@ -151,46 +180,86 @@ def load_json_with_error_handling(file_path, strategy=None):
         try:
             data = json.loads(content)
             if isinstance(data, list):
+                # Auto-detect data type from first few samples
+                if data_type == 'auto' and len(data) > 0:
+                    sample_data = data[0] if len(data) == 1 else data[:min(10, len(data))]
+                    sft_count = sum(1 for item in (sample_data if isinstance(sample_data, list) else [sample_data]) if _validate_sft_data_structure(item))
+                    reward_count = sum(1 for item in (sample_data if isinstance(sample_data, list) else [sample_data]) if _validate_reward_data_structure(item))
+                    
+                    # Determine data type based on which validation passes more samples
+                    if sft_count >= reward_count:
+                        data_type = 'sft'
+                        if strategy:
+                            strategy.print(f"Auto-detected SFT data format in {os.path.basename(file_path)}")
+                    else:
+                        data_type = 'reward'
+                        if strategy:
+                            strategy.print(f"Auto-detected Reward data format in {os.path.basename(file_path)}")
+                
                 for item in data:
                     total_count += 1
-                    if _validate_reward_data_structure(item):
-                        # Only keep necessary three columns: prompt, chosen, rejected
-                        chosen = item.get('chosen', item.get('response_chosen', item.get('good', '')))
-                        rejected = item.get('rejected', item.get('response_rejected', item.get('bad', '')))
-                        
-                        # Skip samples where chosen and rejected are identical
-                        if chosen == rejected:
-                            identical_samples += 1
-                            continue
+                    # Choose validation function based on data type
+                    if data_type == 'sft':
+                        if _validate_sft_data_structure(item):
+                            # Keep original data structure for SFT
+                            valid_data.append(item)
+                            valid_count += 1
+                        else:
+                            validation_failed += 1
+                    else:  # reward data
+                        if _validate_reward_data_structure(item):
+                            # Only keep necessary three columns: prompt, chosen, rejected
+                            chosen = item.get('chosen', item.get('response_chosen', item.get('good', '')))
+                            rejected = item.get('rejected', item.get('response_rejected', item.get('bad', '')))
                             
-                        filtered_item = {
-                            'prompt': item.get('prompt', ''),
-                            'chosen': chosen,
-                            'rejected': rejected
-                        }
-                        valid_data.append(filtered_item)
-                        valid_count += 1
-                    else:
-                        validation_failed += 1
+                            # Skip samples where chosen and rejected are identical
+                            if chosen == rejected:
+                                identical_samples += 1
+                                continue
+                                
+                            filtered_item = {
+                                'prompt': item.get('prompt', ''),
+                                'chosen': chosen,
+                                'rejected': rejected
+                            }
+                            valid_data.append(filtered_item)
+                            valid_count += 1
+                        else:
+                            validation_failed += 1
             else:
                 # Single object
                 total_count = 1
-                if _validate_reward_data_structure(data):
-                    chosen = data.get('chosen', data.get('response_chosen', data.get('good', '')))
-                    rejected = data.get('rejected', data.get('response_rejected', data.get('bad', '')))
-                    
-                    # Skip samples where chosen and rejected are identical
-                    if chosen != rejected:
-                        filtered_item = {
-                            'prompt': data.get('prompt', ''),
-                            'chosen': chosen,
-                            'rejected': rejected
-                        }
-                        valid_data.append(filtered_item)
-                    valid_count = 1
+                if data_type == 'auto':
+                    if _validate_sft_data_structure(data):
+                        data_type = 'sft'
+                        if strategy:
+                            strategy.print(f"Auto-detected SFT data format in {os.path.basename(file_path)}")
+                    elif _validate_reward_data_structure(data):
+                        data_type = 'reward'
+                        if strategy:
+                            strategy.print(f"Auto-detected Reward data format in {os.path.basename(file_path)}")
+                
+                if data_type == 'sft':
+                    if _validate_sft_data_structure(data):
+                        valid_data.append(data)
+                        valid_count = 1
+                else:  # reward data
+                    if _validate_reward_data_structure(data):
+                        chosen = data.get('chosen', data.get('response_chosen', data.get('good', '')))
+                        rejected = data.get('rejected', data.get('response_rejected', data.get('bad', '')))
+                        
+                        # Skip samples where chosen and rejected are identical
+                        if chosen != rejected:
+                            filtered_item = {
+                                'prompt': data.get('prompt', ''),
+                                'chosen': chosen,
+                                'rejected': rejected
+                            }
+                            valid_data.append(filtered_item)
+                        valid_count = 1
         except json.JSONDecodeError:
             # Try to parse line by line as JSONL
-            valid_data, total_count, valid_count = _parse_json_lines(content, strategy)
+            valid_data, total_count, valid_count = _parse_json_lines(content, strategy, data_type)
     
     except Exception as e:
         if strategy:
@@ -226,13 +295,42 @@ def load_json_with_error_handling(file_path, strategy=None):
         return load_dataset("json", data_files=[])
 
 
-def _parse_json_lines(content, strategy):
+def _parse_json_lines(content, strategy, data_type='auto'):
     """Parse JSONL format content"""
     valid_data = []
     total_count = 0
     valid_count = 0
     
     lines = content.split('\n')
+    
+    # Auto-detect data type from first few valid lines
+    if data_type == 'auto':
+        sample_lines = []
+        for line in lines[:10]:  # Check first 10 lines
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                sample_lines.append(data)
+                if len(sample_lines) >= 5:  # Enough samples for detection
+                    break
+            except json.JSONDecodeError:
+                continue
+        
+        if sample_lines:
+            sft_count = sum(1 for item in sample_lines if _validate_sft_data_structure(item))
+            reward_count = sum(1 for item in sample_lines if _validate_reward_data_structure(item))
+            
+            if sft_count >= reward_count:
+                data_type = 'sft'
+                if strategy:
+                    strategy.print(f"Auto-detected SFT data format in JSONL")
+            else:
+                data_type = 'reward'
+                if strategy:
+                    strategy.print(f"Auto-detected Reward data format in JSONL")
+    
     for line in lines:
         line = line.strip()
         if not line:
@@ -241,27 +339,33 @@ def _parse_json_lines(content, strategy):
         total_count += 1
         try:
             data = json.loads(line)
-            if _validate_reward_data_structure(data):
-                # Only keep necessary three columns: prompt, chosen, rejected
-                chosen = data.get('chosen', data.get('response_chosen', data.get('good', '')))
-                rejected = data.get('rejected', data.get('response_rejected', data.get('bad', '')))
-                
-                # Skip samples where chosen and rejected are identical
-                if chosen != rejected:
-                    filtered_item = {
-                        'prompt': data.get('prompt', ''),
-                        'chosen': chosen,
-                        'rejected': rejected
-                    }
-                    valid_data.append(filtered_item)
-                valid_count += 1
+            if data_type == 'sft':
+                if _validate_sft_data_structure(data):
+                    # Keep original data structure for SFT
+                    valid_data.append(data)
+                    valid_count += 1
+            else:  # reward data
+                if _validate_reward_data_structure(data):
+                    # Only keep necessary three columns: prompt, chosen, rejected
+                    chosen = data.get('chosen', data.get('response_chosen', data.get('good', '')))
+                    rejected = data.get('rejected', data.get('response_rejected', data.get('bad', '')))
+                    
+                    # Skip samples where chosen and rejected are identical
+                    if chosen != rejected:
+                        filtered_item = {
+                            'prompt': data.get('prompt', ''),
+                            'chosen': chosen,
+                            'rejected': rejected
+                        }
+                        valid_data.append(filtered_item)
+                    valid_count += 1
         except json.JSONDecodeError:
             continue  # Skip invalid lines
     
     return valid_data, total_count, valid_count
 
 
-def load_directory_with_error_handling(directory_path, strategy):
+def load_directory_with_error_handling(directory_path, strategy, data_type='auto'):
     """Scan directory for data files and load with error handling"""
     datasets_to_concat = []
     
@@ -276,7 +380,7 @@ def load_directory_with_error_handling(directory_path, strategy):
             try:
                 if ext in ['.json', '.jsonl']:
                     # Load JSON files with error handling
-                    dataset = load_json_with_error_handling(file_path, strategy)
+                    dataset = load_json_with_error_handling(file_path, strategy, data_type)
                 else:
                     # Other formats use standard loading
                     if ext == '.csv':
