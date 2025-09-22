@@ -31,12 +31,12 @@ openrlhf.cli.train_sft \
    --input_key question \
    --output_key response \
    --micro_train_batch_size 2 \
-   --max_samples 10000000 \
+   --max_samples 90000000 \
    --pretrain /llm-align/duyimin/duyimin/open_modle/Qwen2.5-7B-8Langs-CPT-250819 \
-   --save_path ./checkpoint/Qwen2_5_sft_0823 \
+   --save_path ./checkpoint/RLer_0922 \
    --save_steps 3000 \
    --logging_steps 3 \
-   --eval_steps 1000 \
+   --eval_steps 100000 \
    --max_epochs 1 \
    --bf16 \
    --attn_implementation flash_attention_2 \
@@ -44,8 +44,8 @@ openrlhf.cli.train_sft \
    --gradient_checkpointing \
    --packing_samples \
    --apply_chat_template \
-   --wandb_project 360_Repo \
-   --wandb_run_name Qwen2_5_sft_0823 \
+   --wandb_project SFT_360_Repo \
+   --wandb_run_name RLer_SFT_0922 \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda
 EOF
 
