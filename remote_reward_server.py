@@ -19,7 +19,7 @@ def load_model():
     """加载 Reward Model"""
     global model, tokenizer
     
-    model_path = "/xfr_ceph_sh/liuchonghan/Qwen_rm_72b/merged_rm8.52_gptpro-2model"
+    model_path = "/xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0829_tongyong"
     
     print(f"Loading reward model from: {model_path}")
     tokenizer = AutoTokenizer.from_pretrained(model_path)

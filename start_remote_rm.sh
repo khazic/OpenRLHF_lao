@@ -3,7 +3,8 @@ echo "Starting Remote Reward Model Server..."
 
 if [ "$CONDA_DEFAULT_ENV" != "openrlhf" ]; then
     echo "Activating openrlhf environment..."
-    source /xfr_ceph_sh/liuchonghan/envs/etc/profile.d/conda.sh
+    # source /xfr_ceph_sh/liuchonghan/envs/etc/profile.d/conda.sh
+    source /llm-align/liuchonghan/env/etc/profile.d/conda.sh
     conda activate openrlhf
 fi
 
