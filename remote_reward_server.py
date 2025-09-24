@@ -26,7 +26,9 @@ def load_model():
     model = AutoModelForSequenceClassification.from_pretrained(
         model_path,
         torch_dtype=torch.bfloat16,
-        device_map="auto"
+        device_map="auto",
+        num_labels=1,  # reward模型通常只有1个输出
+        ignore_mismatched_sizes=True  # 忽略大小不匹配的层
     )
     model.eval()
     print("Reward model loaded successfully!")
