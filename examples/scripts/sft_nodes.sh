@@ -26,14 +26,14 @@ echo "🚀  Master node IP (auto-read from hostfile.txt): $MASTER_ADDR"
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 4096 \
-   --dataset /xfr_ceph_sh/liuchonghan/sft_translate_dataset/SFT_M_Translate_3.json \
+   --dataset /xfr_ceph_sh/liuchonghan/sft_translate_dataset/SFT_M_QA.json,/xfr_ceph_sh/liuchonghan/sft_translate_dataset/SFT_M_QA_2.json,/xfr_ceph_sh/liuchonghan/sft_translate_dataset/SFT_M_Translate.json,/xfr_ceph_sh/liuchonghan/sft_translate_dataset/SFT_M_Translate_2.json \
    --train_batch_size 7680 \
    --input_key question \
    --output_key response \
    --micro_train_batch_size 16 \
    --max_samples 90000000 \
    --pretrain /llm-align/duyimin/duyimin/open_modle/Qwen2.5-7B-8Langs-CPT-250819 \
-   --save_path ./checkpoint/RLer_0922 \
+   --save_path ./checkpoint/RLer_0924 \
    --save_steps 3000 \
    --logging_steps 3 \
    --eval_steps 100000 \
@@ -45,7 +45,7 @@ openrlhf.cli.train_sft \
    --packing_samples \
    --apply_chat_template \
    --wandb_project SFT_360_Repo \
-   --wandb_run_name RLer_SFT_0922 \
+   --wandb_run_name RLer_SFT_0924 \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda
 EOF
 
