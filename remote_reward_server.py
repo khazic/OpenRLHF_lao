@@ -26,10 +26,13 @@ def load_model():
     model = AutoModelForSequenceClassification.from_pretrained(
         model_path,
         torch_dtype=torch.bfloat16,
-        device_map="auto",
+        device_map=None,  # 不使用自动设备分配
         num_labels=1,  # reward模型通常只有1个输出
         ignore_mismatched_sizes=True  # 忽略大小不匹配的层
     )
+    # 手动移动到GPU
+    if torch.cuda.is_available():
+        model = model.to("cuda:0")
     model.eval()
     print("Reward model loaded successfully!")
 
@@ -60,13 +63,26 @@ def get_rewards():
         
         print(f"Received {len(queries)} queries for reward calculation")
         
-        texts = queries
+        # 组合 prompt 和 query 形成完整对话
+        full_conversations = []
+        for prompt, query in zip(prompts, queries):
+            if prompt and query:
+                # 组合成完整对话格式
+                full_conversation = f"[Human]: {prompt}\n[Assistant]: {query}"
+            elif query:
+                # 如果只有 query，直接使用
+                full_conversation = query
+            else:
+                full_conversation = prompt
+            full_conversations.append(full_conversation)
+        
+        print(f"Full conversation[0]: {full_conversations[0]}")
         
         rewards = []
         
         batch_size = 8  
-        for i in range(0, len(texts), batch_size):
-            batch_texts = texts[i:i + batch_size]
+        for i in range(0, len(full_conversations), batch_size):
+            batch_texts = full_conversations[i:i + batch_size]
             
             # Tokenize
             inputs = tokenizer(
