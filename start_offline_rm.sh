@@ -13,7 +13,7 @@ DEVICE="cuda:0"
 BATCH_SIZE=8
 
 # 启动服务器
-python offline_reward_server.py \
+/xfr_ceph_sh/liuchonghan/envs/envs/openrlhf/bin/python offline_reward_server.py \
     --model_path "$MODEL_PATH" \
     --host "$HOST" \
     --port "$PORT" \
