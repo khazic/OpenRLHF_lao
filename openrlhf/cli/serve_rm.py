@@ -22,10 +22,11 @@ class RewardModelProxy:
             bf16=args.bf16,
             load_in_4bit=args.load_in_4bit,
             value_head_prefix=args.value_head_prefix,
-            device_map="auto",
+            device_map=None,
             packing_samples=args.packing_samples,
         )
         self.reward_model.eval()
+        self.reward_model = self.reward_model.to("cuda:0")
 
         self.tokenizer = get_tokenizer(
             args.reward_pretrain, self.reward_model, "left", None, use_fast=not args.disable_fast_tokenizer
