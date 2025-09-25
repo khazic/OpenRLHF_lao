@@ -1,7 +1,7 @@
 set -x
 
 python -m openrlhf.cli.serve_rm \
-    --reward_pretrain /xfr_ceph_sh/liuchonghan/Qwen_rm_72b/merged_rm8.52_gptpro-2model \
+    --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0829_tongyong \
     --port 8000 \
     --bf16 \
     --attn_implementation flash_attention_2 \
