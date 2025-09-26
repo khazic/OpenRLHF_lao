@@ -25,25 +25,26 @@ export WANDB_HTTPS_PROXY=http://lidongming:YqN2VZBHtkYe3aNA@proxy.aidataset.qiho
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 4096 \
-   --dataset /xfr_ceph_sh/liuchonghan/sft_dataset \
+   --dataset /xfr_ceph_sh/liuchonghan/sft_translate_dataset/SFT_M_QA.json,/xfr_ceph_sh/liuchonghan/sft_translate_dataset/SFT_M_QA_2.json,/xfr_ceph_sh/liuchonghan/sft_translate_dataset/SFT_M_Translate.json,/xfr_ceph_sh/liuchonghan/sft_translate_dataset/SFT_M_Translate_2.json \
+   --train_batch_size 32 \
    --input_key question \
    --output_key response \
-   --train_batch_size 4096 \
    --micro_train_batch_size 2 \
-   --max_samples 9000000 \
+   --max_samples 90000000 \
    --pretrain /llm-align/duyimin/duyimin/open_modle/Qwen2.5-7B-8Langs-CPT-250819 \
-   --save_path ./checkpoint/Qwen2_5_sft_0820 \
+   --save_path ./checkpoint/RLer_0926 \
    --save_steps 3000 \
    --logging_steps 3 \
-   --eval_steps 1000 \
+   --eval_steps 100000 \
    --max_epochs 1 \
    --bf16 \
    --attn_implementation flash_attention_2 \
    --learning_rate 5e-6 \
    --gradient_checkpointing \
    --packing_samples \
-   --wandb_project 360_Repo \
-   --wandb_run_name Qwen2_5_sft_0820 \
+   --apply_chat_template \
+   --wandb_project SFT_360_Repo \
+   --wandb_run_name RLer_SFT_0926 \
    --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda
 EOF
 
