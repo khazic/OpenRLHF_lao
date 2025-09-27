@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
 """
-Intensive GPU Keep-Alive Script
-高强度占用GPU显存和计算资源，确保GPU利用率保持高水平
+Simple GPU Keep-Alive Script
+简单但有效的GPU占用脚本，确保GPU利用率保持高水平
 """
 
 import torch
 import time
 import argparse
-import threading
-import numpy as np
-from datetime import datetime
 import multiprocessing as mp
+from datetime import datetime
 
-def intensive_gpu_worker(gpu_id, memory_fraction=0.8, compute_intensity=0.9):
+def simple_gpu_worker(gpu_id, memory_fraction=0.8, compute_intensity=0.9):
     """
-    高强度GPU工作进程，确保GPU利用率保持高水平
+    简单但有效的GPU工作进程
     """
     device = torch.device(f'cuda:{gpu_id}')
     allocated_tensors = []
     
-    print(f"[{datetime.now()}] GPU {gpu_id}: 启动高强度计算...")
+    print(f"[{datetime.now()}] GPU {gpu_id}: 启动简单高强度计算...")
     
     try:
         while True:
@@ -30,76 +28,49 @@ def intensive_gpu_worker(gpu_id, memory_fraction=0.8, compute_intensity=0.9):
             if allocated / total < memory_fraction:
                 try:
                     # 分配大块显存
-                    tensor = torch.randn(1024*1024*50, device=device, dtype=torch.float32)  # 200MB
+                    tensor = torch.randn(1024*1024*100, device=device, dtype=torch.float32)  # 400MB
                     allocated_tensors.append(tensor)
                 except RuntimeError:
                     pass
             
             # 动态管理tensor数量
-            if len(allocated_tensors) > 20:
-                to_remove = allocated_tensors[:10]
+            if len(allocated_tensors) > 30:
+                to_remove = allocated_tensors[:15]
                 for tensor in to_remove:
                     del tensor
-                allocated_tensors = allocated_tensors[10:]
+                allocated_tensors = allocated_tensors[15:]
                 torch.cuda.empty_cache()
             
-            # 高强度计算任务
-            batch_size = int(512 * compute_intensity)
-            seq_len = int(1024 * compute_intensity)
-            hidden_size = int(2048 * compute_intensity)
+            # 简单但高强度计算
+            size = int(2048 * compute_intensity)
             
-            # 创建输入数据
-            x = torch.randn(batch_size, seq_len, hidden_size, device=device, dtype=torch.float32)
+            # 创建大矩阵
+            a = torch.randn(size, size, device=device, dtype=torch.float32)
+            b = torch.randn(size, size, device=device, dtype=torch.float32)
             
-            # 模拟Transformer计算
-            for layer in range(10):
-                # Self-attention
-                w_q = torch.randn(hidden_size, hidden_size, device=device)
-                w_k = torch.randn(hidden_size, hidden_size, device=device)
-                w_v = torch.randn(hidden_size, hidden_size, device=device)
+            # 持续进行矩阵运算
+            for _ in range(50):  # 增加计算轮数
+                c = torch.matmul(a, b)
+                c = torch.relu(c)
+                c = torch.softmax(c, dim=1)
                 
-                q = torch.matmul(x, w_q)
-                k = torch.matmul(x, w_k)
-                v = torch.matmul(x, w_v)
+                # 添加更多计算
+                c = torch.sin(c) + torch.cos(c)
+                c = torch.tanh(c)
+                c = torch.sigmoid(c)
                 
-                # Attention计算
-                scores = torch.matmul(q, k.transpose(-2, -1)) / (hidden_size ** 0.5)
-                attn_weights = torch.softmax(scores, dim=-1)
-                attn_output = torch.matmul(attn_weights, v)
-                
-                # Feed-forward
-                w_ff1 = torch.randn(hidden_size, hidden_size*4, device=device)
-                w_ff2 = torch.randn(hidden_size*4, hidden_size, device=device)
-                
-                ff1 = torch.relu(torch.matmul(attn_output, w_ff1))
-                ff2 = torch.matmul(ff1, w_ff2)
-                
-                # 残差连接和层归一化
-                x = x + ff2
-                x = torch.layer_norm(x, x.shape[-1:])
-                
-                # 添加一些额外的计算
-                x = torch.dropout(x, 0.1, training=True)
-                x = torch.gelu(x)
+                # 更新矩阵用于下一轮
+                a = c
+                b = torch.randn(size, size, device=device, dtype=torch.float32)
             
-            # 最终计算
-            output = torch.mean(x, dim=1)  # 全局平均池化
-            w_logits = torch.randn(hidden_size, 1000, device=device)
-            logits = torch.matmul(output, w_logits)
-            loss = torch.cross_entropy(logits, torch.randint(0, 1000, (batch_size,), device=device))
+            # 计算一些统计信息
+            result = torch.sum(c)
+            result = torch.log(torch.abs(result) + 1e-8)
             
-            # 反向传播（模拟）
-            loss.backward()
+            print(f"[{datetime.now()}] GPU {gpu_id}: 计算完成，结果: {result.item():.6f}, 显存: {allocated:.1f}GB")
             
-            # 清理梯度
-            for param in [q, k, v, ff1, ff2, logits]:
-                if param.grad is not None:
-                    param.grad.zero_()
-            
-            print(f"[{datetime.now()}] GPU {gpu_id}: 高强度计算完成，Loss: {loss.item():.6f}, 显存: {allocated:.1f}GB")
-            
-            # 短暂休息，但保持计算频率
-            time.sleep(0.1)
+            # 很短的休息时间
+            time.sleep(0.05)
             
     except KeyboardInterrupt:
         print(f"[{datetime.now()}] GPU {gpu_id}: 收到中断信号")
@@ -113,7 +84,7 @@ def intensive_gpu_worker(gpu_id, memory_fraction=0.8, compute_intensity=0.9):
         print(f"[{datetime.now()}] GPU {gpu_id}: 显存已清理")
 
 def main():
-    parser = argparse.ArgumentParser(description='Intensive GPU Keep-Alive Script')
+    parser = argparse.ArgumentParser(description='Simple GPU Keep-Alive Script')
     parser.add_argument('--gpu-ids', type=str, default='0,1,2,3,4,5,6,7', 
                        help='要使用的GPU ID列表，用逗号分隔')
     parser.add_argument('--memory-fraction', type=float, default=0.8, 
@@ -135,7 +106,7 @@ def main():
         print(f"错误: GPU {invalid_gpus} 不存在，可用GPU数量: {available_gpus}")
         return
     
-    print(f"启动高强度GPU占用: {gpu_ids}")
+    print(f"启动简单GPU占用: {gpu_ids}")
     print(f"显存占用: {args.memory_fraction*100:.1f}%")
     print(f"计算强度: {args.compute_intensity*100:.1f}%")
     print("按 Ctrl+C 停止")
@@ -146,7 +117,7 @@ def main():
     try:
         for gpu_id in gpu_ids:
             p = mp.Process(
-                target=intensive_gpu_worker,
+                target=simple_gpu_worker,
                 args=(gpu_id, args.memory_fraction, args.compute_intensity)
             )
             p.start()
@@ -167,7 +138,7 @@ def main():
                     gpu_id = gpu_ids[i]
                     print(f"[{datetime.now()}] 重启GPU {gpu_id}进程")
                     new_p = mp.Process(
-                        target=intensive_gpu_worker,
+                        target=simple_gpu_worker,
                         args=(gpu_id, args.memory_fraction, args.compute_intensity)
                     )
                     new_p.start()
