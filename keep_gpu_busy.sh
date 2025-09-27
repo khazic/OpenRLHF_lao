@@ -16,7 +16,7 @@ echo "计算强度: $(echo "$COMPUTE_INTENSITY * 100" | bc)%"
 echo "按 Ctrl+C 停止"
 echo "----------------------------------------"
 
-python3 gpu_keepalive_simple.py \
+python3 gpu_keepalive_aggressive.py \
     --gpu-ids "$GPU_IDS" \
     --memory-fraction $MEMORY_FRACTION \
     --compute-intensity $COMPUTE_INTENSITY
