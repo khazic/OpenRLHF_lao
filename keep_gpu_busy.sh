@@ -1,13 +1,11 @@
 #!/bin/bash
 
-# 高强度GPU占用脚本
-# 使用方法: 
 #   ./keep_gpu_busy.sh [GPU_IDS] [MEMORY_FRACTION] [COMPUTE_INTENSITY]
-#   例如: ./keep_gpu_busy.sh "0,1,2,3,4,5,6,7" 0.8 0.9
+#   例如: ./keep_gpu_busy.sh "0,1,2,3,4,5,6,7,8" 0.3 0.3
 
-GPU_IDS=${1:-"0,1,2,3,4,5,6,7"}
-MEMORY_FRACTION=${2:-0.8}
-COMPUTE_INTENSITY=${3:-0.9}
+GPU_IDS=${1:-"0,1,2,3,4,5,6,7,8"}
+MEMORY_FRACTION=${2:-0.3}
+COMPUTE_INTENSITY=${3:-0.3}
 
 echo "启动高强度GPU占用脚本..."
 echo "GPU IDs: $GPU_IDS"
