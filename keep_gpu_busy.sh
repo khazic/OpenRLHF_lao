@@ -4,8 +4,8 @@
 #   例如: ./keep_gpu_busy.sh "0,1,2,3,4,5,6,7,8" 0.3 0.3
 
 GPU_IDS=${1:-"0,1,2,3,4,5,6,7"}
-MEMORY_FRACTION=${2:-0.3}
-COMPUTE_INTENSITY=${3:-0.3}
+MEMORY_FRACTION=${2:-0.5}
+COMPUTE_INTENSITY=${3:-0.5}
 
 echo "启动高强度GPU占用脚本..."
 echo "GPU IDs: $GPU_IDS"
