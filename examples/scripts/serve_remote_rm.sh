@@ -1,8 +1,8 @@
 set -x
 
-python -m openrlhf.cli.serve_rm \
-    --reward_pretrain OpenRLHF/Llama-3-8b-rm-700k \
-    --port 5000 \
+/xfr_ceph_sh/liuchonghan/envs/envs/openrlhf/bin/python - -m openrlhf.cli.serve_rm \
+    --reward_pretrain /xfr_ceph_sh/liuchonghan/OpenRLHF_lao/examples/scripts/checkpoint/RewardModel_0829_tongyong \
+    --port 8000 \
     --bf16 \
     --attn_implementation flash_attention_2 \
     --normalize_reward \

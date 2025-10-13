@@ -712,7 +712,7 @@ class RemoteExperienceMaker(ABC):
             for experience, group_reward_std in zip(experiences, group_reward_stds):
                 experience.info["group_reward_std"] = group_reward_std
 
-        # reward shaping
+        # reward reshaping
         if args.advantage_estimator == "rloo":
             baseline = (rewards.sum(-1, keepdim=True) - rewards) / (args.n_samples_per_prompt - 1)
             rewards = rewards - baseline
@@ -722,6 +722,12 @@ class RemoteExperienceMaker(ABC):
             rewards = rewards - rewards.mean(-1, keepdim=True)
         elif args.advantage_estimator == "group_norm":
             rewards = (rewards - rewards.mean(-1, keepdim=True)) / (rewards.std(-1, keepdim=True) + 1e-9)
+        elif args.advantage_estimator == "xpo":
+            # xPO: (rewards - group_mean) / minibatch_std
+            # Use batch-level variance instead of group-level variance for more stable normalization
+            group_means = rewards.mean(-1, keepdim=True)
+            microbatch_std = rewards.std(0, keepdim=True) + 1e-9
+            rewards = (rewards - group_means) / microbatch_std
 
         rewards = rewards.reshape(-1)[indices].split(exp_len)
 
@@ -743,14 +749,15 @@ class RemoteExperienceMaker(ABC):
                     args.gamma,
                     args.lambd,
                 )
-            elif self.advantage_estimator in ["reinforce", "rloo", "reinforce_baseline", "group_norm", "dr_grpo"]:
+            elif self.advantage_estimator in ["reinforce", "rloo", "reinforce_baseline", "group_norm", "dr_grpo", "xpo"]:
                 if args.gamma != 1.0 and self.advantage_estimator in [
                     "rloo",
-                    "reinforce_baseline",
+                    "reinforce_baseline", 
                     "group_norm",
                     "dr_grpo",
+                    "xpo",
                 ]:
-                    logger.warning("gamma is set to 1.0 for rloo, reinforce_baseline, and group_norm")
+                    logger.warning("gamma is set to 1.0 for rloo, reinforce_baseline, group_norm, dr_grpo, and xpo")
                     args.gamma = 1.0
 
                 experience.returns = self.get_cumulative_returns(
@@ -769,7 +776,7 @@ class RemoteExperienceMaker(ABC):
             experience.kl = None
 
         # Normalize advantages across all experiences for GAE, REINFORCE, and REINFORCE-baseline
-        if self.args.advantage_estimator in ["gae", "reinforce", "reinforce_baseline"]:
+        if self.args.advantage_estimator in ["gae", "reinforce", "reinforce_baseline", "xpo"]:
             all_advantages = []
             all_action_masks = []
             for exp in experiences:

@@ -220,6 +220,7 @@ def _get_reward_model(base_pretrained_model, base_llm_model, value_head_prefix="
 
             if not self.training and self.normalize_reward:
                 reward = (reward - self.mean) / self.std
+                # reward = torch.tanh(reward) # tanh to keep reward in [-1, 1] xpo setting
 
             return (reward, outputs) if return_output else reward
 

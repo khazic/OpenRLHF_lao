@@ -2,12 +2,22 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 
-def preprocess_data(data, input_template=None, input_key="input", label_key=None, apply_chat_template=None) -> str:
+def preprocess_data(data, input_template=None, input_key="input", label_key=None, apply_chat_template=None, disable_thinking=False) -> str:
     if apply_chat_template:
         chat = data[input_key]
         if isinstance(chat, str):
-            chat = [{"role": "user", "content": chat}]
-        prompt = apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
+            chat = [{"role": "user", "content": chat}]        
+        if disable_thinking:
+            content = chat[0]["content"] if len(chat) > 0 and "content" in chat[0] else str(chat)
+            prompt = f"<|im_start|>user\n{content}<|im_end|>\n<|im_start|>assistant\n"
+        else:
+            # 正常使用tokenizer的chat template
+            try:
+                prompt = apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
+            except Exception as e:
+                # 回退到简化格式
+                content = chat[0]["content"] if len(chat) > 0 and "content" in chat[0] else str(chat)
+                prompt = f"<|im_start|>user\n{content}<|im_end|>\n<|im_start|>assistant\n"
     else:
         prompt = data[input_key]
         if input_template:
@@ -44,6 +54,7 @@ class PromptDataset(Dataset):
         input_key = getattr(self.strategy.args, "input_key", None)
         label_key = getattr(self.strategy.args, "label_key", None)
         apply_chat_template = getattr(self.strategy.args, "apply_chat_template", False)
+        disable_thinking = getattr(self.strategy.args, "disable_thinking", False)
 
         if apply_chat_template:
             apply_chat_template = self.tokenizer.apply_chat_template
@@ -52,7 +63,7 @@ class PromptDataset(Dataset):
         self.labels = []
         self.datasources = []
         for data in tqdm(dataset, desc="Preprocessing data", disable=not self.strategy.is_rank_0()):
-            prompt, label = preprocess_data(data, input_template, input_key, label_key, apply_chat_template)
+            prompt, label = preprocess_data(data, input_template, input_key, label_key, apply_chat_template, disable_thinking)
             self.prompts.append(prompt)
             self.labels.append(label)
             self.datasources.append(data.get("datasource", "default"))

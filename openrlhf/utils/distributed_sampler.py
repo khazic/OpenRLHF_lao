@@ -68,7 +68,7 @@ class DistributedSampler(Sampler[_T_co]):
         dataset: Dataset,
         num_replicas: Optional[int] = None,
         rank: Optional[int] = None,
-        shuffle: bool = True,
+        shuffle: bool = False,
         seed: int = 0,
         drop_last: bool = False,
         consumed_samples=0,
