@@ -7,23 +7,23 @@ def preprocess_data(data, input_template=None, input_key="input", label_key=None
         chat = data[input_key]
         if isinstance(chat, str):
             chat = [{"role": "user", "content": chat}]        
-        if disable_thinking:
-            content = chat[0]["content"] if len(chat) > 0 and "content" in chat[0] else str(chat)
-            prompt = f"<|im_start|>user\n{content}<|im_end|>\n<|im_start|>assistant\n"
-        else:
-            # 正常使用tokenizer的chat template
-            try:
+        
+        try:
+            if disable_thinking:
+                prompt = apply_chat_template(chat, tokenize=False, add_generation_prompt=True, enable_thinking=False)
+            else:
                 prompt = apply_chat_template(chat, tokenize=False, add_generation_prompt=True)
-            except Exception as e:
-                # 回退到简化格式
-                content = chat[0]["content"] if len(chat) > 0 and "content" in chat[0] else str(chat)
+        except Exception as e:
+            content = chat[0]["content"] if len(chat) > 0 and "content" in chat[0] else str(chat)
+            if disable_thinking:
+                prompt = f"<|im_start|>user\n{content}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+            else:
                 prompt = f"<|im_start|>user\n{content}<|im_end|>\n<|im_start|>assistant\n"
     else:
         prompt = data[input_key]
         if input_template:
             prompt = input_template.format(prompt)
 
-    # for Reinforced Fine-tuning
     label = "" if label_key is None else data[label_key]
     return prompt, label
 
