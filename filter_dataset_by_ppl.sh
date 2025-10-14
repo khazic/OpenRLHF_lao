@@ -2,14 +2,14 @@
 # 基于PPL筛选数据集 - 删除低质量样本
 
 MODEL_PATH="/xfr_ceph_sh/liuchonghan/checkpoints_set/RLer_MtPO_allenai_025"
-DATASET_PATH="/xfr_ceph_sh/liuchonghan/sft_dataset/SFT_EN_QA.json"
+DATASET_PATH="/xfr_ceph_sh/liuchonghan/sft_dataset"
 
 # PPL阈值设置：高于此值的样本将被删除
 # 建议值：
 #   - 严格筛选: 5.0  (删除更多样本，保留最高质量)
 #   - 中等筛选: 10.0 (平衡质量和数量)
 #   - 宽松筛选: 20.0 (只删除明显的异常样本)
-PPL_THRESHOLD=10.0
+PPL_THRESHOLD=1.0
 
 deepspeed --num_gpus 8 calculate_ppl_per_sample.py \
     --pretrain ${MODEL_PATH} \
