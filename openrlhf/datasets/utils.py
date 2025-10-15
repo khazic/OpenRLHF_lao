@@ -1,13 +1,101 @@
-import os
-import tempfile
-import json
 import glob
+import hashlib
+import json
+import os
+import shutil
+import tempfile
+from contextlib import contextmanager
+from pathlib import Path
 
-from datasets import interleave_datasets, load_dataset, load_from_disk, concatenate_datasets
+from datasets import concatenate_datasets, interleave_datasets, load_dataset, load_from_disk
+
+try:
+    from filelock import FileLock
+except ImportError:  # pragma: no cover - filelock is an optional dependency in some envs
+    FileLock = None
 
 
 def exist_and_not_none(d, key):
     return key in d and not d[key] is None
+
+
+def _strategy_print(strategy, message: str):
+    if strategy is None:
+        return
+    try:
+        strategy.print(message)
+    except Exception:
+        pass
+
+
+def _should_cache_dataset(strategy) -> bool:
+    if strategy is None or not hasattr(strategy, "args"):
+        return False
+    return getattr(strategy.args, "cache_dataset_to_disk", False)
+
+
+def _dataset_cache_base_dir(strategy) -> str:
+    if strategy is not None and hasattr(strategy, "args"):
+        cache_dir = getattr(strategy.args, "dataset_cache_dir", None)
+        if cache_dir:
+            return os.path.abspath(cache_dir)
+    return os.path.join(Path.home(), ".cache", "openrlhf", "datasets")
+
+
+@contextmanager
+def _dataset_cache_lock(path: str):
+    """Provide a shared lock around cache operations."""
+    if FileLock is None:
+        yield
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    lock = FileLock(path)
+    with lock:
+        yield
+
+
+def _build_cache_key(dataset_path: str, dataset_split: str = None, data_dir: str = None) -> str:
+    parts = [dataset_path]
+    if data_dir:
+        parts.append(f"data_dir={data_dir}")
+    if dataset_split:
+        parts.append(f"split={dataset_split}")
+    # Include modification time for local assets to help invalidation
+    candidate = dataset_path if dataset_path else ""
+    try:
+        if candidate and os.path.exists(candidate):
+            parts.append(f"mtime={os.path.getmtime(candidate)}")
+    except OSError:
+        pass
+    return "||".join(parts)
+
+
+def _maybe_cache_dataset(dataset_obj, dataset_path: str, dataset_split: str, data_dir: str, strategy):
+    """Persist dataset to Arrow files on disk for faster subsequent loads."""
+    if not _should_cache_dataset(strategy):
+        return dataset_obj
+
+    base_dir = _dataset_cache_base_dir(strategy)
+    os.makedirs(base_dir, exist_ok=True)
+
+    cache_key = _build_cache_key(dataset_path, dataset_split, data_dir)
+    cache_hash = hashlib.md5(cache_key.encode("utf-8")).hexdigest()
+    cache_path = os.path.join(base_dir, cache_hash)
+    lock_path = f"{cache_path}.lock"
+
+    with _dataset_cache_lock(lock_path):
+        if os.path.isdir(cache_path):
+            try:
+                cached_dataset = load_from_disk(cache_path)
+                _strategy_print(strategy, f"Loaded dataset cache from {cache_path}")
+                return cached_dataset
+            except Exception as exc:
+                _strategy_print(strategy, f"Failed to load dataset cache at {cache_path}: {exc}. Rebuilding cache.")
+                shutil.rmtree(cache_path, ignore_errors=True)
+
+        dataset_obj.save_to_disk(cache_path)
+        _strategy_print(strategy, f"Cached dataset to {cache_path}")
+        return dataset_obj
 
 
 def blending_datasets(
@@ -36,20 +124,20 @@ def blending_datasets(
 
     data_list = []
     for i, dataset in enumerate(datasets):
-        dataset = dataset.strip()
-        strategy.print(f"dataset: {dataset}")
+        dataset_entry = dataset.strip()
+        _strategy_print(strategy, f"dataset: {dataset_entry}")
 
-        data_dir = dataset.split("@")[1].strip() if "@" in dataset else None
-        dataset = dataset.split("@")[0].strip()
-        dataset_basename = os.path.basename(dataset)
+        data_dir = dataset_entry.split("@")[1].strip() if "@" in dataset_entry else None
+        dataset_path = dataset_entry.split("@")[0].strip()
+        dataset_basename = os.path.basename(dataset_path)
 
         ext = os.path.splitext(dataset)[-1]
         # local python script
         if ext == ".py" or (
-            os.path.isdir(dataset) and os.path.exists(os.path.join(dataset, f"{dataset_basename}.py"))
+            os.path.isdir(dataset_path) and os.path.exists(os.path.join(dataset_path, f"{dataset_basename}.py"))
         ):
-            data = load_dataset(dataset, trust_remote_code=True)
-            strategy.print(f"loaded {dataset} with python script")
+            data = load_dataset(dataset_path, trust_remote_code=True)
+            _strategy_print(strategy, f"loaded {dataset_path} with python script")
         # local text file
         elif ext in [".json", ".jsonl", ".csv", ".parquet", ".arrow"]:
             ext = ext.lower().strip(".")
@@ -57,36 +145,37 @@ def blending_datasets(
                 ext = "json"
             if ext == "json":
                 # Use our error handling for JSON files with auto-detection
-                data = load_json_with_error_handling(dataset, strategy, 'auto')
+                data = load_json_with_error_handling(dataset_path, strategy, "auto")
             else:
-                data = load_dataset(ext, data_files=dataset)
-            strategy.print(f"loaded {dataset} with data_files={dataset}")
+                data = load_dataset(ext, data_files=dataset_path)
+            _strategy_print(strategy, f"loaded {dataset_path} with data_files={dataset_path}")
         # local dataset saved with `datasets.Dataset.save_to_disk`
-        elif os.path.isdir(dataset):
+        elif os.path.isdir(dataset_path):
             try:
-                data = load_from_disk(dataset)
-                strategy.print(f"loaded {dataset} from disk")
+                data = load_from_disk(dataset_path)
+                _strategy_print(strategy, f"loaded {dataset_path} from disk")
             except Exception as e:
-                strategy.print(f"failed to load {dataset} from disk: {e}")
+                _strategy_print(strategy, f"failed to load {dataset_path} from disk: {e}")
                 try:
-                    data = load_directory_with_error_handling(dataset, strategy, 'auto')
-                    strategy.print(f"loaded {dataset} with error handling")
+                    data = load_directory_with_error_handling(dataset_path, strategy, "auto")
+                    _strategy_print(strategy, f"loaded {dataset_path} with error handling")
                 except Exception as e2:
-                    data = load_dataset(dataset, data_dir=data_dir)
-                    strategy.print(f"loaded {dataset} from files")
+                    data = load_dataset(dataset_path, data_dir=data_dir)
+                    _strategy_print(strategy, f"loaded {dataset_path} from files")
         # remote/local folder or common file
         elif strategy.args.use_ms:
             from modelscope.msdatasets import MsDataset
 
-            namespace, dataset = dataset.split("/")
-            data = MsDataset.load(dataset, namespace=namespace)
+            namespace, dataset_name = dataset_path.split("/")
+            data = MsDataset.load(dataset_name, namespace=namespace)
         else:
-            data = load_dataset(dataset, data_dir=data_dir)
-            strategy.print(f"loaded {dataset} from files")
+            data = load_dataset(dataset_path, data_dir=data_dir)
+            _strategy_print(strategy, f"loaded {dataset_path} from files")
 
         # Select dataset
         if dataset_split and dataset_split in data:
             data = data[dataset_split]
+        data = _maybe_cache_dataset(data, dataset_path, dataset_split, data_dir, strategy)
         data = data.select(range(min(max_count, len(data))))
         data_list.append(data)
 
@@ -96,8 +185,6 @@ def blending_datasets(
 
     # If probabilities is None, concatenate datasets directly
     if probabilities is None:
-        from datasets import concatenate_datasets
-
         dataset = concatenate_datasets(data_list)
     else:
         dataset = interleave_datasets(

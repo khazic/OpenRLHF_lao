@@ -58,4 +58,4 @@ for host in "${HOSTS[@]}"; do
   fi
 done
 
-echo "All done. You can now run sft.sh without sshpass."
+echo "All done. You can now run .sh without sshpass."

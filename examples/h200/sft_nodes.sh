@@ -27,14 +27,14 @@ export TRANSFORMERS_NO_ADVISORY_WARNINGS=1
 export NCCL_DEBUG=ERROR  
 export NCCL_DEBUG_SUBSYS=NONE  
 
-export MASTER_ADDR=22.25.243.30
+export MASTER_ADDR=22.25.243.26
 export MASTER_PORT=29501
-export WORLD_SIZE=32
+export WORLD_SIZE=64
 export LOCAL_RANK=0
 
 echo "🚀  Master node IP: $MASTER_ADDR"
-echo "🚀  Total nodes: 4"
-echo "🚀  Total GPUs: 32 (8 per node)"
+echo "🚀  Total nodes: 8"
+echo "🚀  Total GPUs: 64 (8 per node)"
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
