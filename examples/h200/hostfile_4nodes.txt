@@ -1,0 +1,4 @@
+root@22.25.243.30 slots=8
+root@22.25.243.19 slots=8
+root@22.7.227.210 slots=8
+root@22.7.225.223 slots=8
