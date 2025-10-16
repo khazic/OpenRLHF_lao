@@ -92,6 +92,17 @@ def _maybe_cache_dataset(dataset_obj, dataset_path: str, dataset_split: str, dat
             except Exception as exc:
                 _strategy_print(strategy, f"Failed to load dataset cache at {cache_path}: {exc}. Rebuilding cache.")
                 shutil.rmtree(cache_path, ignore_errors=True)
+                if os.path.exists(cache_path):
+                    try:
+                        os.remove(cache_path)
+                    except OSError:
+                        pass
+
+        if os.path.exists(cache_path) and not os.path.isdir(cache_path):
+            try:
+                os.remove(cache_path)
+            except OSError:
+                pass
 
         dataset_obj.save_to_disk(cache_path)
         _strategy_print(strategy, f"Cached dataset to {cache_path}")

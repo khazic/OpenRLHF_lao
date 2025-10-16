@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 set -x
 
+export WANDB_MODE=offline
+
 export TRANSFORMERS_CACHE="/mnt/data/liuchonghan/hf_cache"
 export HF_HOME="/mnt/data/liuchonghan/hf_home"
 export TRITON_CACHE_DIR="/mnt/data/liuchonghan/triton_cache"
@@ -9,10 +11,10 @@ OPENRLHF_PREFIX="/mnt/data/liuchonghan/env/openrlhf"
 OPENRLHF_SITE="$OPENRLHF_PREFIX/lib/python3.10/site-packages"
 
 if [[ ":$PATH:" != *":$OPENRLHF_PREFIX/bin:"* ]]; then
-  export PATH="$OPENRLHF_PREFIX/bin:$PATH"
+  export PATH=/mnt/data/liuchonghan/env/openrlhf/bin:$PATH
 fi
 if [[ -d "$OPENRLHF_SITE" && ":$PYTHONPATH:" != *":$OPENRLHF_SITE:"* ]]; then
-  export PYTHONPATH="$OPENRLHF_SITE${PYTHONPATH:+:$PYTHONPATH}"
+  export PYTHONPATH=/mnt/data/liuchonghan/OpenRLHF_lao:$PYTHONPATH
 fi
 export CONDA_PREFIX="$OPENRLHF_PREFIX"
 
@@ -56,7 +58,9 @@ openrlhf.cli.train_sft \
    --learning_rate 5e-6 \
    --gradient_checkpointing \
    --packing_samples \
-   --apply_chat_template
+   --apply_chat_template \
+   --cache_dataset_to_disk \
+   --dataset_cache_dir /mnt/data/liuchonghan/dataset_cache
 EOF
 
 export DS_SSH_PASSWORD=1
