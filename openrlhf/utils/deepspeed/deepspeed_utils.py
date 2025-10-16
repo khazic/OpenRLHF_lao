@@ -23,7 +23,7 @@ def get_train_ds_config(
         "offload_param": {"device": device},
         "offload_optimizer": {
             "device": "cpu" if adam_offload else "none",
-            "pin_memory": True,
+            "pin_memory": False,  # 禁用pin_memory以避免CUDA错误
         },
         "sub_group_size": "auto",
         "stage3_max_live_parameters": "auto",
@@ -163,12 +163,24 @@ def offload_deepspeed_states(model, pin_memory=True, non_blocking=True):
             # OffloadStateTypeEnum.lp_params,
         ]
 
-    model.optimizer.offload_states(
-        include=offload_state_types,
-        device=OffloadDeviceEnum.cpu,
-        pin_memory=pin_memory,
-        non_blocking=non_blocking,
-    )
+    try:
+        model.optimizer.offload_states(
+            include=offload_state_types,
+            device=OffloadDeviceEnum.cpu,
+            pin_memory=pin_memory,
+            non_blocking=non_blocking,
+        )
+    except RuntimeError as err:
+        if pin_memory and "invalid argument" in str(err):
+            # Retry without pinning when CUDA rejects pin_memory (common on some drivers)
+            model.optimizer.offload_states(
+                include=offload_state_types,
+                device=OffloadDeviceEnum.cpu,
+                pin_memory=False,
+                non_blocking=non_blocking,
+            )
+        else:
+            raise
     model.empty_partition_cache()
     torch.cuda.empty_cache()
     torch.distributed.barrier()

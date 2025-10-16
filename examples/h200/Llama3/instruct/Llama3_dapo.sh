@@ -52,4 +52,8 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --vllm_sync_backend nccl \
    --enforce_eager \
    --vllm_enable_sleep \
-   --deepspeed_enable_sleep
+   --deepspeed_enable_sleep \
+   --use_wandb 9c69c18b00c7dac67189f39e261a257ebd476cda \
+   --wandb_org "khazzz1c" \
+   --wandb_project ICML2026 \
+   --wandb_run_name ICML2026_Instruct_Llama3_dapo
