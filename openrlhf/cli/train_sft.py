@@ -201,6 +201,19 @@ if __name__ == "__main__":
     parser.add_argument("--lr_scheduler", type=str, default="cosine_with_min_lr")
     parser.add_argument("--l2", type=float, default=0, help="weight decay loss")
     parser.add_argument("--adam_betas", type=float, nargs=2, default=(0.9, 0.95), help="Betas for Adam optimizer")
+    parser.add_argument(
+        "--sft_loss",
+        type=str,
+        default="standard",
+        choices=["standard", "encouraging"],
+        help="Loss function to use for supervised fine-tuning.",
+    )
+    parser.add_argument(
+        "--encouraging_loss_log_end",
+        type=float,
+        default=0.5,
+        help="log_end hyperparameter for the encouraging loss.",
+    )
 
     # ring-attention
     parser.add_argument("--ring_attn_size", type=int, default=1, help="Ring attention group size")

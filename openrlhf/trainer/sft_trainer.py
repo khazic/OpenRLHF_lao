@@ -5,7 +5,7 @@ import torch
 from torch.optim import Optimizer
 from tqdm import tqdm
 
-from openrlhf.models import SFTLoss
+from openrlhf.models import EncouragingLoss, SFTLoss
 from openrlhf.utils.distributed_sampler import DistributedSampler
 
 
@@ -61,7 +61,14 @@ class SFTTrainer(ABC):
         self.save_hf_ckpt = save_hf_ckpt
         self.disable_ds_ckpt = disable_ds_ckpt
 
-        self.loss_fn = SFTLoss()
+        loss_type = getattr(self.args, "sft_loss", "standard")
+        if loss_type == "encouraging":
+            log_end = getattr(self.args, "encouraging_loss_log_end", 0.5)
+            self.loss_fn = EncouragingLoss(log_end=log_end)
+        elif loss_type == "standard":
+            self.loss_fn = SFTLoss()
+        else:
+            raise ValueError(f"Unsupported sft_loss value: {loss_type}")
 
         # Mixtral 8*7b
         self.aux_loss = self.args.aux_loss_coef > 1e-8

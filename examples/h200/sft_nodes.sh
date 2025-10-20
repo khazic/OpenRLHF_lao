@@ -2,6 +2,7 @@
 set -x
 
 export WANDB_MODE=offline
+export HF_DATASETS_DISABLE_MULTIPROCESSING=1
 
 export TRANSFORMERS_CACHE="/mnt/data/liuchonghan/hf_cache"
 export HF_HOME="/mnt/data/liuchonghan/hf_home"
@@ -41,18 +42,19 @@ echo "🚀  Total GPUs: 64 (8 per node)"
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 4096 \
-   --dataset /mnt/data/liuchonghan/sft_translate_dataset \
+   --dataset /mnt/data/liuchonghan/sft_translate_dataset/train_mon.json \
    --train_batch_size 10240 \
    --input_key question \
    --output_key response \
    --micro_train_batch_size 16 \
    --max_samples 90000000 \
    --pretrain /mnt/data/liuchonghan/Qwen_cpt \
-   --save_path ./checkpoint/RLer_1015 \
+   --save_path ./checkpoint/RLer_1017 \
    --save_steps 3000 \
    --logging_steps 3 \
    --eval_steps 100000 \
    --max_epochs 1 \
+   --sft_loss encouraging \
    --bf16 \
    --attn_implementation flash_attention_2 \
    --learning_rate 5e-6 \
