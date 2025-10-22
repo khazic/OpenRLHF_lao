@@ -46,6 +46,8 @@ def _dataset_cache_base_dir(strategy) -> str:
 def _dataset_cache_lock(path: str):
     """Provide a shared lock around cache operations."""
     if FileLock is None:
+        # Create parent directory to reduce race conditions even without filelock
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         yield
         return
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -70,8 +72,61 @@ def _build_cache_key(dataset_path: str, dataset_split: str = None, data_dir: str
     return "||".join(parts)
 
 
+def _dist_info():
+    """Return (is_dist, rank) safely even if torch.distributed is unavailable."""
+    try:
+        import torch.distributed as dist
+        if dist.is_available() and dist.is_initialized():
+            return True, dist.get_rank()
+    except Exception:
+        pass
+    return False, 0
+
+
+def _atomic_replace_dir(src_dir: str, dst_dir: str):
+    """
+    Atomically replace dst_dir with src_dir.
+    - If dst_dir already exists (directory/file), delete it first then replace.
+    - Use os.replace to ensure "near-atomic" behavior on the same mount point.
+    """
+    if os.path.exists(dst_dir):
+        # Remove both directories and files
+        try:
+            if os.path.isdir(dst_dir) and not os.path.islink(dst_dir):
+                shutil.rmtree(dst_dir, ignore_errors=True)
+            else:
+                os.remove(dst_dir)
+        except OSError:
+            # Try one more time as last resort
+            try:
+                shutil.rmtree(dst_dir, ignore_errors=True)
+            except Exception:
+                pass
+    # Ensure parent directory exists
+    os.makedirs(os.path.dirname(dst_dir), exist_ok=True)
+    os.replace(src_dir, dst_dir)
+
+
+def _safe_load_from_disk(cache_path: str, strategy):
+    """Safely attempt load_from_disk with logging."""
+    try:
+        ds = load_from_disk(cache_path)
+        _strategy_print(strategy, f"Loaded dataset cache from {cache_path}")
+        return ds
+    except Exception as exc:
+        _strategy_print(strategy, f"Failed to load dataset cache at {cache_path}: {exc}")
+        return None
+
+
 def _maybe_cache_dataset(dataset_obj, dataset_path: str, dataset_split: str, data_dir: str, strategy):
-    """Persist dataset to Arrow files on disk for faster subsequent loads."""
+    """
+    Persist dataset to Arrow files on disk for faster subsequent loads.
+
+    Multi-machine safety:
+    - Only rank0 is responsible for writing cache (with file lock + atomic disk write)
+    - Other ranks wait for barrier then load_from_disk
+    - Supports non-distributed scenarios (equivalent to original logic)
+    """
     if not _should_cache_dataset(strategy):
         return dataset_obj
 
@@ -83,30 +138,92 @@ def _maybe_cache_dataset(dataset_obj, dataset_path: str, dataset_split: str, dat
     cache_path = os.path.join(base_dir, cache_hash)
     lock_path = f"{cache_path}.lock"
 
-    with _dataset_cache_lock(lock_path):
-        if os.path.isdir(cache_path):
-            try:
-                cached_dataset = load_from_disk(cache_path)
-                _strategy_print(strategy, f"Loaded dataset cache from {cache_path}")
-                return cached_dataset
-            except Exception as exc:
-                _strategy_print(strategy, f"Failed to load dataset cache at {cache_path}: {exc}. Rebuilding cache.")
-                shutil.rmtree(cache_path, ignore_errors=True)
-                if os.path.exists(cache_path):
-                    try:
-                        os.remove(cache_path)
-                    except OSError:
-                        pass
+    is_dist, rank = _dist_info()
 
-        if os.path.exists(cache_path) and not os.path.isdir(cache_path):
+    # Fast path: cache directory is already a healthy readable dataset
+    if os.path.isdir(cache_path):
+        ds = _safe_load_from_disk(cache_path, strategy)
+        if ds is not None:
+            return ds
+        # If corrupted, proceed to rebuild process below
+
+    # If cache path is "file instead of directory", clean it first
+    if os.path.exists(cache_path) and not os.path.isdir(cache_path):
+        try:
+            os.remove(cache_path)
+        except OSError:
+            pass
+
+    if is_dist and rank != 0:
+        # Non-rank0: wait for rank0 to handle cache (write/rebuild/clean)
+        # Note: cannot barrier inside lock (would cause deadlock), barrier first then try to read
+        try:
+            import torch.distributed as dist
+            dist.barrier()
+        except Exception:
+            pass
+
+        # Read cache (if rank0 has already written it)
+        ds = _safe_load_from_disk(cache_path, strategy)
+        if ds is not None:
+            return ds
+
+        # If still not readable, rank0 might have failed or just started writing, fallback once: barrier again
+        try:
+            import torch.distributed as dist
+            dist.barrier()
+        except Exception:
+            pass
+        ds = _safe_load_from_disk(cache_path, strategy)
+        if ds is not None:
+            return ds
+
+        # Final fallback: directly return in-memory dataset_obj to avoid training being stuck on I/O
+        _strategy_print(strategy, f"[rank{rank}] Cache not ready; using in-memory dataset.")
+        return dataset_obj
+
+    # rank0 or single machine: responsible for building/fixing cache
+    with _dataset_cache_lock(lock_path):
+        # Double check: check again inside lock if it's already readable
+        if os.path.isdir(cache_path):
+            ds = _safe_load_from_disk(cache_path, strategy)
+            if ds is not None:
+                return ds
+            # If not readable, clean directory and prepare for rebuild
             try:
-                os.remove(cache_path)
+                shutil.rmtree(cache_path, ignore_errors=True)
             except OSError:
                 pass
 
-        dataset_obj.save_to_disk(cache_path)
-        _strategy_print(strategy, f"Cached dataset to {cache_path}")
-        return dataset_obj
+        # Build temporary directory, atomic replace after disk write
+        parent = os.path.dirname(cache_path)
+        os.makedirs(parent, exist_ok=True)
+        tmp_dir = tempfile.mkdtemp(prefix=f".tmp_{os.path.basename(cache_path)}_", dir=parent)
+        try:
+            dataset_obj.save_to_disk(tmp_dir)
+            _atomic_replace_dir(tmp_dir, cache_path)
+            _strategy_print(strategy, f"Cached dataset to {cache_path}")
+        except Exception as exc:
+            _strategy_print(strategy, f"Failed to cache dataset to {cache_path}: {exc}")
+            # Clean up temporary directory
+            try:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            except OSError:
+                pass
+            # Try to continue returning in-memory version to avoid crash
+            return dataset_obj
+
+    # Let other ranks continue
+    if is_dist:
+        try:
+            import torch.distributed as dist
+            dist.barrier()
+        except Exception:
+            pass
+
+    # Return cached loaded version (consistent with upstream expectations)
+    ds = _safe_load_from_disk(cache_path, strategy)
+    return ds if ds is not None else dataset_obj
 
 
 def blending_datasets(
@@ -174,9 +291,8 @@ def blending_datasets(
                     data = load_dataset(dataset_path, data_dir=data_dir)
                     _strategy_print(strategy, f"loaded {dataset_path} from files")
         # remote/local folder or common file
-        elif strategy.args.use_ms:
+        elif strategy and hasattr(strategy, "args") and getattr(strategy.args, "use_ms", False):
             from modelscope.msdatasets import MsDataset
-
             namespace, dataset_name = dataset_path.split("/")
             data = MsDataset.load(dataset_name, namespace=namespace)
         else:
@@ -187,11 +303,17 @@ def blending_datasets(
         if dataset_split and dataset_split in data:
             data = data[dataset_split]
         data = _maybe_cache_dataset(data, dataset_path, dataset_split, data_dir, strategy)
-        data = data.select(range(min(max_count, len(data))))
+        data = data.select(range(min(int(max_count), len(data))))
         data_list.append(data)
 
     # merge datasets
-    if strategy.is_rank_0():
+    is_rank0 = False
+    try:
+        if strategy is not None and hasattr(strategy, "is_rank_0") and callable(strategy.is_rank_0):
+            is_rank0 = strategy.is_rank_0()
+    except Exception:
+        pass
+    if is_rank0:
         print(data_list)
 
     # If probabilities is None, concatenate datasets directly

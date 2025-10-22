@@ -8,3 +8,8 @@ set -x
     --normalize_reward \
     --max_len 8192 \
     --batch_size 16
+
+
+# curl -X POST "http://localhost:8000/get_reward" \
+#      -H "Content-Type: application/json" \
+#      -d '{"query": ["Hello world"], "prompts": ["Hi there"]}'
