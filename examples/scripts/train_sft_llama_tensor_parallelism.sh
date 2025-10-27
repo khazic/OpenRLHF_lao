@@ -22,7 +22,7 @@ openrlhf.cli.train_sft \
    --load_checkpoint \
    --gradient_checkpointing \
    --packing_samples \
-   --ds_tensor_parallel_size 2
+   --ds_tensor_parallel_size 4
 EOF
     # --wandb [WANDB_TOKENS]
     # --packing_samples
