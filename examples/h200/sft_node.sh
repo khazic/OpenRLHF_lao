@@ -2,7 +2,7 @@
 set -x
 
 export WANDB_MODE=offline
-export HF_DATASETS_DISABLE_MULTIPROCESSING=0
+#export HF_DATASETS_DISABLE_MULTIPROCESSING=1
 
 export TRANSFORMERS_CACHE="/mnt/data/liuchonghan/hf_cache"
 export HF_HOME="/mnt/data/liuchonghan/hf_home"
@@ -35,33 +35,33 @@ export MASTER_PORT=29501
 export WORLD_SIZE=64
 export LOCAL_RANK=0
 
-echo "🚀   Master node IP: $MASTER_ADDR"
-echo "🚀   Total nodes: 8"
-echo "🚀   Total GPUs: 64 (8 per node)"
+echo "🚀  Master node IP: $MASTER_ADDR"
+echo "🚀  Total nodes: 8"
+echo "🚀  Total GPUs: 64 (8 per node)"
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
-   --max_len 8192 \
-   --dataset /mnt/data/liuchonghan/sft_translate_dataset_processed_tongyong \
-   --train_batch_size 128 \
+   --max_len 4096 \
+   --dataset /mnt/data/liuchonghan/sft_translate_dataset \
+   --train_batch_size 5120 \
    --input_key question \
    --output_key response \
-   --micro_train_batch_size 1 \
-   --max_samples 50000000 \
-   --pretrain /mnt/data/duyimin/Qwen2.5-72B \
-   --save_path ./checkpoint/Qwen72_sft_tongyong_1ep \
-   --save_steps -1 \
-   --logging_steps 1 \
-   --eval_steps -1 \
-   --max_epochs 1 \
-   --sft_loss encouraging \
+   --micro_train_batch_size 16 \
+   --max_samples 90000000 \
+   --pretrain /mnt/data/liuchonghan/Qwen_cpt \
+   --save_path ./checkpoint/RLer_1017_4 \
+   --save_steps 3000 \
+   --logging_steps 3 \
+   --eval_steps 100000 \
+   --max_epochs 3 \
    --bf16 \
    --attn_implementation flash_attention_2 \
-   --learning_rate 8e-6 \
+   --learning_rate 5e-6 \
    --gradient_checkpointing \
    --packing_samples \
    --apply_chat_template \
-   --lr_warmup_ratio 0.1
+   --cache_dataset_to_disk \
+   --dataset_cache_dir /mnt/data/liuchonghan/dataset_cache
 EOF
 
 export DS_SSH_PASSWORD=1

@@ -23,22 +23,12 @@ mkdir -p /mnt/data/liuchonghan/hf_cache
 mkdir -p /mnt/data/liuchonghan/hf_home
 mkdir -p /mnt/data/liuchonghan/triton_cache
 mkdir -p /mnt/data/liuchonghan/torch_home
-mkdir -p /mnt/data/liuchonghan/tmp
 
 export CUDA_LAUNCH_BLOCKING=0
 export TRANSFORMERS_NO_ADVISORY_WARNINGS=1
 
 export NCCL_DEBUG=ERROR  
 export NCCL_DEBUG_SUBSYS=NONE  
-
-export HF_DATASETS_IN_MEMORY_MAX_SIZE=0  
-export ARROW_IO_THREADS=8  
-export HF_DATASETS_OFFLINE=1  
-export TOKENIZERS_PARALLELISM=false
-
-export TMPDIR="/mnt/data/liuchonghan/tmp"
-export TEMP="/mnt/data/liuchonghan/tmp"
-export TMP="/mnt/data/liuchonghan/tmp"
 
 export MASTER_ADDR=22.25.243.26
 export MASTER_PORT=29501
@@ -48,33 +38,31 @@ export LOCAL_RANK=0
 echo "🚀  Master node IP: $MASTER_ADDR"
 echo "🚀  Total nodes: 8"
 echo "🚀  Total GPUs: 64 (8 per node)"
-echo "📁  Using preprocessed dataset: /mnt/data/liuchonghan/sft_translate_dataset_processed_tongyong"
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 8192 \
-   --dataset /mnt/data/liuchonghan/sft_translate_dataset_processed_tongyong \
-   --train_batch_size 5120 \
+   --dataset /mnt/data/liuchonghan/main_dataset_es \
+   --train_batch_size 4096 \
    --input_key question \
    --output_key response \
-   --micro_train_batch_size 16 \
-   --max_samples 30000000 \
+   --micro_train_batch_size 8 \
+   --max_samples 50000000 \
    --pretrain /mnt/data/liuchonghan/Qwen_cpt \
-   --save_path ./checkpoint/RLer_1024_main7b_mm_tongyong \
+   --save_path ./checkpoint/Qwen7b_sft_tongyong_1es \
    --save_steps -1 \
    --logging_steps 1 \
-   --eval_steps 100000 \
+   --eval_steps -1 \
+   --packing_samples \
    --max_epochs 1 \
    --sft_loss encouraging \
    --bf16 \
    --attn_implementation flash_attention_2 \
-   --learning_rate 1e-5 \
+   --learning_rate 7e-6 \
    --gradient_checkpointing \
-   --packing_samples \
    --apply_chat_template \
-   --lr_warmup_ratio 0.1
+   --lr_warmup_ratio 0.1 
 EOF
-
 export DS_SSH_PASSWORD=1
 export DS_SSH_PASSWORD_AUTH=true
 
