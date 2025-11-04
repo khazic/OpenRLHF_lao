@@ -41,28 +41,28 @@ export NCCL_IB_RETRY_CNT=7
 export DS_TIMEOUT=1800
 export DS_ELASTIC_TIMEOUT=1800
 
-export MASTER_ADDR=22.25.243.26
+export MASTER_ADDR=22.25.243.29
 export MASTER_PORT=29501
-export WORLD_SIZE=64
+export WORLD_SIZE=120
 export LOCAL_RANK=0
 
 echo "🚀   Master node IP: $MASTER_ADDR"
-echo "🚀   Total nodes: 8"
-echo "🚀   Total GPUs: 64 (8 per node)"
+echo "🚀   Total nodes:158"
+echo "🚀   Total GPUs:120 (8 per node)"
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 8192 \
-   --dataset /mnt/data/liuchonghan/72b_dataset_arrow \
-   --train_batch_size 192 \
+   --dataset /mnt/data/liuchonghan/main_dataset_arrow \
+   --train_batch_size 2880 \
    --input_key question \
    --output_key response \
-   --micro_train_batch_size 4 \
+   --micro_train_batch_size 12 \
    --max_samples 50000000 \
    --pretrain /mnt/data/liuchonghan/Qwen72b_cpt \
-   --save_path ./checkpoint/RLer_Qwen72ckpt \
+   --save_path ./checkpoint/RLer_Qwen72ckpt_1103 \
    --save_steps -1 \
-   --logging_steps 1 \
+   --logging_steps 2 \
    --eval_steps -1 \
    --packing_samples \
    --max_epochs 1 \
@@ -75,7 +75,7 @@ openrlhf.cli.train_sft \
    --lr_warmup_ratio 0.1 \
    --ds_tensor_parallel_size 4 \
    --zero_stage 2 \
-   --zpg 8 \
+   --zpg 30 \
    --overlap_comm 
 EOF
 
@@ -83,7 +83,7 @@ export DS_SSH_PASSWORD=1
 export DS_SSH_PASSWORD_AUTH=true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOSTFILE="${SCRIPT_DIR}/hostfile_4nodes.txt"
+HOSTFILE="${SCRIPT_DIR}/hostfile_nodes.txt"
 DEEPSPEED_BIN="${OPENRLHF_PREFIX}/bin/deepspeed"
 
 "$DEEPSPEED_BIN" --hostfile "$HOSTFILE" \

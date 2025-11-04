@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One-shot script to enable passwordless SSH for all nodes in hostfile_4nodes.txt.
+# One-shot script to enable passwordless SSH for all nodes in hostfile_nodes.txt.
 # Usage: bash setup_passwordless_ssh.sh [ssh_password]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOSTFILE="${SCRIPT_DIR}/hostfile_4nodes.txt"
+HOSTFILE="${SCRIPT_DIR}/hostfile_nodes.txt"
 
 if [[ ! -f "$HOSTFILE" ]]; then
   echo "Hostfile not found: $HOSTFILE" >&2

@@ -30,39 +30,52 @@ export TRANSFORMERS_NO_ADVISORY_WARNINGS=1
 export NCCL_DEBUG=ERROR  
 export NCCL_DEBUG_SUBSYS=NONE  
 
-export MASTER_ADDR=22.25.243.26
+export NCCL_SOCKET_TIMEOUT=3600000
+export NCCL_HEARTBEAT_TIMEOUT_SEC=300
+export NCCL_CONNECT_TIMEOUT=600
+export NCCL_BLOCKING_WAIT=1
+export NCCL_ASYNC_ERROR_HANDLING=1
+export NCCL_IB_TIMEOUT=22
+export NCCL_IB_RETRY_CNT=7
+
+export DS_TIMEOUT=1800
+export DS_ELASTIC_TIMEOUT=1800
+
+export MASTER_ADDR=22.25.243.29
 export MASTER_PORT=29501
-export WORLD_SIZE=64
+export WORLD_SIZE=120
 export LOCAL_RANK=0
 
-echo "🚀  Master node IP: $MASTER_ADDR"
-echo "🚀  Total nodes: 8"
-echo "🚀  Total GPUs: 64 (8 per node)"
+echo "🚀   Master node IP: $MASTER_ADDR"
+echo "🚀   Total nodes:158"
+echo "🚀   Total GPUs:120 (8 per node)"
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
-   --max_len 20000 \
-   --dataset /mnt/data/liuchonghan/longcontext_dataset \
-   --train_batch_size 128 \
+   --max_len 8192 \
+   --dataset /mnt/data/liuchonghan/main_dataset_arrow \
+   --train_batch_size 480 \
    --input_key question \
    --output_key response \
-   --micro_train_batch_size 1 \
-   --max_samples 90000000 \
-   --pretrain /mnt/data/liuchonghan/Qwen_cpt \
-   --save_path ./checkpoint/RLer_1021_elloss_long_3ep \
-   --save_steps 3000 \
-   --logging_steps 3 \
-   --eval_steps 1000 \
-   --max_epochs 3 \
+   --micro_train_batch_size 2 \
+   --max_samples 50000000 \
+   --pretrain /mnt/data/liuchonghan/Qwen72b_cpt \
+   --save_path ./checkpoint/RLer_Qwen72ckpt_1103 \
+   --save_steps -1 \
+   --logging_steps 2 \
+   --eval_steps -1 \
+   --packing_samples \
+   --max_epochs 1 \
    --sft_loss encouraging \
    --bf16 \
    --attn_implementation flash_attention_2 \
-   --learning_rate 5e-6 \
-   --gradient_checkpointing \
-   --packing_samples \
+   --learning_rate 7e-6 \
    --apply_chat_template \
-   --cache_dataset_to_disk \
-   --dataset_cache_dir /mnt/data/liuchonghan/dataset_cache
+   --lr_warmup_ratio 0.1 \
+   --ds_tensor_parallel_size 4 \
+   --zero_stage 2 \
+   --zpg 30 \
+   --overlap_comm 
 EOF
 
 export DS_SSH_PASSWORD=1

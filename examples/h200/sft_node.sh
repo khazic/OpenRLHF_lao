@@ -68,7 +68,7 @@ export DS_SSH_PASSWORD=1
 export DS_SSH_PASSWORD_AUTH=true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOSTFILE="${SCRIPT_DIR}/hostfile_4nodes.txt"
+HOSTFILE="${SCRIPT_DIR}/hostfile_nodes.txt"
 DEEPSPEED_BIN="${OPENRLHF_PREFIX}/bin/deepspeed"
 
 "$DEEPSPEED_BIN" --hostfile "$HOSTFILE" \
