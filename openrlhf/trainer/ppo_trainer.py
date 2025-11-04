@@ -164,37 +164,96 @@ class BasePPOTrainer(ABC):
         if self.strategy.args.vllm_enable_sleep:
             batch_vllm_engine_call(self.vllm_engines, "sleep")
 
+    def _prepare_train_logs(self, logs_dict: dict) -> dict:
+        """Normalize and regroup training metrics before logging."""
+        alias_map = {
+            "policy_loss": "actor/policy_loss",
+            "ppl": "actor/ppl",
+            "grad_norm": "actor/grad_norm",
+            "actor_lr": "optimizer/actor_lr",
+            "entropy_loss": "actor/entropy_loss",
+            "token_entropy": "actor/token_entropy",
+            "sequence_entropy": "actor/sequence_entropy",
+            "policy_entropy": "actor/policy_entropy",
+            "entropy_var": "actor/entropy_variance",
+            "entropy_var_loss": "actor/entropy_var_loss",
+            "kl_coefficient": "actor/kl_coef",
+            "ppo_clip_ratio": "actor/clip_fraction",
+            "ppo_kl": "actor/approx_kl",
+            "vllm_kl": "actor/vllm_kl",
+            "critic_loss": "critic/loss",
+            "critic_total_loss": "critic/total_loss",
+            "critic_aux_loss": "critic/aux_loss",
+            "critic_value_mean": "critic/value_mean",
+            "critic_value_std": "critic/value_std",
+            "critic_target_mean": "critic/target_mean",
+            "critic_target_std": "critic/target_std",
+            "critic_lr": "optimizer/critic_lr",
+            "reward": "rollout/reward",
+            "reward_mean": "rollout/reward_mean",
+            "reward_std": "rollout/reward_std",
+            "return": "rollout/return_sum",
+            "return_mean": "rollout/return_mean",
+            "return_std": "rollout/return_std",
+            "return_sum_mean": "rollout/return_sum_mean",
+            "return_sum_std": "rollout/return_sum_std",
+            "advantage_mean": "rollout/advantage_mean",
+            "advantage_std": "rollout/advantage_std",
+            "value_baseline_mean": "rollout/value_baseline_mean",
+            "value_baseline_std": "rollout/value_baseline_std",
+            "ratio_mean": "rollout/ratio_mean",
+            "kl": "rollout/kl_mean",
+            "tis_ratio": "rollout/truncated_is_ratio",
+            "response_length": "rollout/response_length",
+            "total_length": "rollout/total_length",
+            "response_clip_ratio": "rollout/response_truncation_rate",
+            "dynamic_filtering_pass_rate": "rollout/dynamic_filter_pass_rate",
+        }
+
+        processed_logs = {}
+        for key, value in logs_dict.items():
+            alias = alias_map.get(key, key)
+            metric_value = value
+            if isinstance(metric_value, torch.Tensor):
+                metric_value = metric_value.detach()
+                metric_value = metric_value.mean().item() if metric_value.numel() > 1 else metric_value.item()
+            processed_logs[alias] = metric_value
+        return processed_logs
+
     def save_logs_and_checkpoints(self, args, global_step, step_bar, logs_dict={}, client_states={}):
+        logs_dict = dict(logs_dict)
         if global_step % args.logging_steps == 0:
+            generated_samples = logs_dict.pop("generated_samples", None)
+            processed_logs = self._prepare_train_logs(logs_dict)
+
             # wandb
             if self._wandb is not None:
                 # Add generated samples to wandb using Table
-                if "generated_samples" in logs_dict:
+                if generated_samples is not None:
                     # https://github.com/wandb/wandb/issues/2981#issuecomment-1997445737
                     new_table = self._wandb.Table(
                         columns=self.generated_samples_table.columns, data=self.generated_samples_table.data
                     )
-                    new_table.add_data(global_step, *logs_dict.pop("generated_samples"))
+                    new_table.add_data(global_step, *generated_samples)
                     self.generated_samples_table = new_table
                     self._wandb.log({"train/generated_samples": new_table})
                 logs = {
                     "train/%s" % k: v
                     for k, v in {
-                        **logs_dict,
+                        **processed_logs,
                         "global_step": global_step,
                     }.items()
                 }
                 self._wandb.log(logs)
             # TensorBoard
             elif self._tensorboard is not None:
-                for k, v in logs_dict.items():
-                    if k == "generated_samples":
-                        # Record generated samples in TensorBoard using simple text format
-                        text, reward = v
-                        formatted_text = f"Sample:\n{text}\n\nReward: {reward:.4f}"
-                        self._tensorboard.add_text("train/generated_samples", formatted_text, global_step)
-                    else:
-                        self._tensorboard.add_scalar(f"train/{k}", v, global_step)
+                if generated_samples is not None:
+                    text, reward = generated_samples
+                    formatted_text = f"Sample:\n{text}\n\nReward: {reward:.4f}"
+                    self._tensorboard.add_text("train/generated_samples", formatted_text, global_step)
+
+                for k, v in processed_logs.items():
+                    self._tensorboard.add_scalar(f"train/{k}", v, global_step)
 
         # TODO: Add evaluation mechanism for PPO
         if global_step % args.eval_steps == 0 and self.eval_dataloader and len(self.eval_dataloader) > 0:

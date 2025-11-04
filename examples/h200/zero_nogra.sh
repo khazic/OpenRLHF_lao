@@ -47,14 +47,14 @@ export WORLD_SIZE=120
 export LOCAL_RANK=0
 
 echo "🚀   Master node IP: $MASTER_ADDR"
-echo "🚀   Total nodes:158"
+echo "🚀   Total nodes:15"
 echo "🚀   Total GPUs:120 (8 per node)"
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 8192 \
    --dataset /mnt/data/liuchonghan/main_dataset_arrow \
-   --train_batch_size 480 \
+   --train_batch_size 240 \
    --input_key question \
    --output_key response \
    --micro_train_batch_size 2 \
@@ -71,10 +71,10 @@ openrlhf.cli.train_sft \
    --attn_implementation flash_attention_2 \
    --learning_rate 7e-6 \
    --apply_chat_template \
-   --lr_warmup_ratio 0.1 \
+   --lr_warmup_ratio 0.05 \
    --ds_tensor_parallel_size 4 \
    --zero_stage 2 \
-   --zpg 30 \
+   --zpg 20 \
    --overlap_comm 
 EOF
 

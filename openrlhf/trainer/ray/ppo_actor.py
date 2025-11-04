@@ -502,11 +502,12 @@ class ActorPPOTrainer(ABC):
             "policy_loss": actor_loss.detach().item(),
             "ppl": torch.exp(actor_loss.detach()).item(),
             "grad_norm": grad_norm,
-            "actor_lr": self.actor_scheduler.get_last_lr()[0]
+            "actor_lr": self.actor_scheduler.get_last_lr()[0],
+            "kl_coefficient": kl_ctl,
         }
         if self.args.entropy_loss_coef is not None:
             status["entropy_loss"] = entropy_loss.detach().item()
-        
+
         if self.args.entropy_loss_coef is not None and hasattr(output, 'entropy'):
             token_entropy = output.entropy.mean().item()
             
@@ -531,6 +532,50 @@ class ActorPPOTrainer(ABC):
             status["token_entropy"] = token_entropy
             status["sequence_entropy"] = sequence_entropy
             status["policy_entropy"] = policy_entropy
+
+        # Track statistics for advantages, returns and baseline values
+        mask = experience.action_mask.float()
+        denom = mask.sum().clamp(min=1.0)
+
+        advantages_tensor = experience.advantages.float()
+        advantage_mean = (advantages_tensor * mask).sum() / denom
+        advantage_var = ((advantages_tensor - advantage_mean) ** 2 * mask).sum() / denom
+        status["advantage_mean"] = advantage_mean.item()
+        status["advantage_std"] = advantage_var.clamp(min=0.0).sqrt().item()
+
+        returns_tensor = experience.returns.float()
+        returns_mean = (returns_tensor * mask).sum() / denom
+        returns_var = ((returns_tensor - returns_mean) ** 2 * mask).sum() / denom
+        status["return_mean"] = returns_mean.item()
+        status["return_std"] = returns_var.clamp(min=0.0).sqrt().item()
+
+        # Baseline value statistics (critic predictions cached in experience)
+        if experience.values is not None:
+            values_tensor = experience.values.float()
+            value_mean = (values_tensor * mask).sum() / denom
+            value_var = ((values_tensor - value_mean) ** 2 * mask).sum() / denom
+            status["value_baseline_mean"] = value_mean.item()
+            status["value_baseline_std"] = value_var.clamp(min=0.0).sqrt().item()
+
+        # Importance sampling ratio statistics
+        status["ratio_mean"] = masked_mean(ratio, experience.action_mask).item()
+
+        # Reward/return diagnostics aggregated per rollout
+        reward_tensor = experience.info.get("reward")
+        if reward_tensor is not None:
+            reward_flat = reward_tensor.float().reshape(-1)
+            status["reward_mean"] = reward_flat.mean().item()
+            status["reward_std"] = (
+                reward_flat.std(unbiased=False).item() if reward_flat.numel() > 1 else 0.0
+            )
+
+        episode_return = experience.info.get("return")
+        if episode_return is not None:
+            episode_return_flat = episode_return.float().reshape(-1)
+            status["return_sum_mean"] = episode_return_flat.mean().item()
+            status["return_sum_std"] = (
+                episode_return_flat.std(unbiased=False).item() if episode_return_flat.numel() > 1 else 0.0
+            )
 
         # Add entropy monitoring for new tokens (only if enabled and occasionally)
         if getattr(self.args, 'enable_new_token_monitoring', False):

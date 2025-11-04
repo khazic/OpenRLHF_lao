@@ -72,7 +72,7 @@ openrlhf.cli.train_sft \
    --learning_rate 7e-6 \
    --gradient_checkpointing \
    --apply_chat_template \
-   --lr_warmup_ratio 0.1 \
+   --lr_warmup_ratio 0.05 \
    --ds_tensor_parallel_size 4 \
    --zero_stage 2 \
    --zpg 30 \
