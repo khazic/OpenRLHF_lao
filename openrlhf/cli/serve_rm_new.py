@@ -22,10 +22,9 @@ class RewardModelProxy:
             bf16=args.bf16,
             load_in_4bit=args.load_in_4bit,
             value_head_prefix=args.value_head_prefix,
-            device_map=None,  # 不使用自动设备分配，避免设备不匹配
+            device_map=None,  # Avoid auto device mapping to prevent mismatched devices
             packing_samples=args.packing_samples,
         )
-        # 手动将模型移动到指定设备
         if hasattr(args, 'device') and args.device:
             self.reward_model = self.reward_model.to(args.device)
         else:
@@ -44,14 +43,13 @@ class RewardModelProxy:
         else:
             batch_size = self.batch_size
 
-        # 组合 prompt 和 query 形成完整对话
         full_conversations = []
         for prompt, query in zip(prompts, queries):
             if prompt and query:
-                # 组合成完整对话格式
+                # Combine into a complete conversation format
                 full_conversation = f"[Human]: {prompt}\n[Assistant]: {query}"
             elif query:
-                # 如果只有 query，直接使用
+                # If only the query exists, use it directly
                 full_conversation = query
             else:
                 full_conversation = prompt
@@ -95,7 +93,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=5000, help="Port number for the server")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="IP for the server")
     
-    # 添加设备选择参数
+    # Add device selection argument
     parser.add_argument("--device", type=str, default="cuda:0", help="Device to run the model on")
 
     # Performance

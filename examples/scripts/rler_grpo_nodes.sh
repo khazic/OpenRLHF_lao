@@ -59,74 +59,74 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --wandb_run_name qwen2_5_rler_grpo_main
 
 # ============================================================================
-# 必须遵守的数量关系约束 (Critical Parameter Constraints)
+# Parameter relationships that must hold (Critical Parameter Constraints)
 # ============================================================================
 
-# 【GPU资源约束】
-# 1. 总GPU数量计算:
+# [GPU resource constraints]
+# 1. Total GPU count calculation:
 #    - Actor GPUs: ref_num_nodes × ref_num_gpus_per_node = 2 × 8 = 16 GPUs
 #    - Reference GPUs: actor_num_nodes × actor_num_gpus_per_node = 2 × 8 = 16 GPUs  
 #    - Reward GPUs: reward_num_nodes × reward_num_gpus_per_node = 2 × 8 = 16 GPUs
 #    - VLLM GPUs: vllm_num_engines × vllm_tensor_parallel_size = 4 × 4 = 16 GPUs
-#    总需求: 64 GPUs (如果colocate_all_models=True，实际只需16 GPUs)
+#    Total requirement: 64 GPUs (if colocate_all_models=True, only 16 GPUs are needed in practice)
 
-# 2. VLLM引擎约束:
-#    - vllm_tensor_parallel_size 必须能被GPU数量整除
-#    - vllm_num_engines × vllm_tensor_parallel_size ≤ 可用GPU总数
-#    - 推荐: vllm_tensor_parallel_size = 2的幂次 (1,2,4,8)
+# 2. VLLM engine constraints:
+#    - vllm_tensor_parallel_size must evenly divide the GPU count
+#    - vllm_num_engines × vllm_tensor_parallel_size ≤ total available GPUs
+#    - Recommended: vllm_tensor_parallel_size = power of two (1,2,4,8)
 
-# 【批次大小约束】
-# 3. 训练批次关系:
-#    - train_batch_size 必须能被 micro_train_batch_size 整除
-#    - 当前: 128 ÷ 8 = 16 (每个训练步骤需要16个GPU微批次)
-#    - train_batch_size 必须 ≤ (actor_num_nodes × actor_num_gpus_per_node × micro_train_batch_size)
-#    - 当前检查: 128 ≤ (2 × 8 × 8) = 128 ✓
+# [Batch size constraints]
+# 3. Training batch relationship:
+#    - train_batch_size must be divisible by micro_train_batch_size
+#    - Current: 128 ÷ 8 = 16 (each training step needs 16 GPU micro-batches)
+#    - train_batch_size must be ≤ (actor_num_nodes × actor_num_gpus_per_node × micro_train_batch_size)
+#    - Current check: 128 ≤ (2 × 8 × 8) = 128 ✓
 
-# 4. Rollout批次关系:
-#    - rollout_batch_size 必须能被 micro_rollout_batch_size 整除  
-#    - 当前: 128 ÷ 16 = 8 (每个rollout步骤需要8个GPU微批次)
-#    - rollout_batch_size 必须 ≤ (vllm_num_engines × micro_rollout_batch_size × 并发倍数)
+# 4. Rollout batch relationship:
+#    - rollout_batch_size must be divisible by micro_rollout_batch_size  
+#    - Current: 128 ÷ 16 = 8 (each rollout step needs 8 GPU micro-batches)
+#    - rollout_batch_size must be ≤ (vllm_num_engines × micro_rollout_batch_size × concurrency factor)
 
-# 【内存和序列长度约束】
-# 5. 序列长度限制:
-#    - prompt_max_len + generate_max_len ≤ 模型最大序列长度
-#    - 当前: 4096 + 4096 = 8192 tokens (需要模型支持8K上下文)
-#    - 显存需求 ∝ batch_size × sequence_length × hidden_size
+# [Memory and sequence length constraints]
+# 5. Sequence length limits:
+#    - prompt_max_len + generate_max_len ≤ model maximum sequence length
+#    - Current: 4096 + 4096 = 8192 tokens (requires the model to support an 8K context)
+#    - Memory usage ∝ batch_size × sequence_length × hidden_size
 
-# 6. 显存估算 (粗略):
-#    - 每个样本显存需求 ≈ sequence_length × hidden_size × 4 bytes (bf16)
-#    - 训练时峰值: train_batch_size × total_sequence_length × model_size × 3倍(梯度+优化器)
-#    - Rollout时峰值: rollout_batch_size × n_samples_per_prompt × total_sequence_length
+# 6. Memory estimation (rough):
+#    - Memory per sample ≈ sequence_length × hidden_size × 4 bytes (bf16)
+#    - Training peak: train_batch_size × total_sequence_length × model_size × 3 (gradients + optimizer states)
+#    - Rollout peak: rollout_batch_size × n_samples_per_prompt × total_sequence_length
 
-# 【数据流约束】
-# 7. 数据处理流程:
-#    - 每个epoch处理数据量: min(max_samples, 实际数据集大小)
-#    - 每批rollout生成: rollout_batch_size × n_samples_per_prompt 个样本
-#    - 每批rollout需要训练步数: (rollout_batch_size × n_samples_per_prompt) ÷ train_batch_size
-#    - 当前: (128 × 8) ÷ 128 = 8 个训练步骤
+# [Data-flow constraints]
+# 7. Data processing flow:
+#    - Data processed per epoch: min(max_samples, actual dataset size)
+#    - Samples generated per rollout batch: rollout_batch_size × n_samples_per_prompt
+#    - Training steps per rollout batch: (rollout_batch_size × n_samples_per_prompt) ÷ train_batch_size
+#    - Current: (128 × 8) ÷ 128 = 8 training steps
 
-# 8. 总训练步骤计算:
-#    - 总批次数 = ceil(实际数据量 ÷ rollout_batch_size)
-#    - 总训练步骤 = 总批次数 × 每批训练步数 × max_epochs
-#    - 当前估算: ceil(5000 ÷ 128) × 8 × 1 = 40 × 8 = 320 步
+# 8. Total training step calculation:
+#    - Total number of batches = ceil(actual data volume ÷ rollout_batch_size)
+#    - Total training steps = total batches × steps per batch × max_epochs
+#    - Current estimate: ceil(5000 ÷ 128) × 8 × 1 = 40 × 8 = 320 steps
 
-# 【学习率和收敛约束】
-# 9. 学习率设置:
-#    - actor_learning_rate 通常比预训练小1-2个数量级
-#    - 当前: 5e-7 适合从已训练的SFT模型微调
-#    - 建议范围: 1e-7 到 1e-5
+# [Learning rate and convergence constraints]
+# 9. Learning rate settings:
+#    - actor_learning_rate is typically 1–2 orders of magnitude smaller than the pretraining LR
+#    - Current: 5e-7 is suitable for fine-tuning an SFT model
+#    - Suggested range: 1e-7 to 1e-5
 
-# 【KL散度控制约束】
-# 10. KL系数设置:
-#     - init_kl_coef 控制与reference模型的偏离程度
-#     - 过大: 模型不敢探索，过小: 可能偏离原始能力
-#     - 当前: 1e-3 是常用值
+# [KL divergence control constraints]
+# 10. KL coefficient settings:
+#     - init_kl_coef controls how far we diverge from the reference model
+#     - Too large: model will not explore; too small: model may drift away from baseline ability
+#     - Current: 1e-3 is a common value
 
-# 【硬件兼容性检查】
-# 11. 必要检查项:
-#     - 确保所有节点都有相同的GPU数量和型号
-#     - 确保网络带宽足够支持大批次的all-reduce通信
-#     - 确保每个节点有足够内存加载模型 (通常需要 > 模型大小 × 2.5)
+# [Hardware compatibility checklist]
+# 11. Mandatory checks:
+#     - Ensure every node has the same GPU count and model
+#     - Ensure network bandwidth can support large-batch all-reduce communication
+#     - Ensure each node has enough memory to load the model (typically > model size × 2.5)
 
 # ============================================================================
 

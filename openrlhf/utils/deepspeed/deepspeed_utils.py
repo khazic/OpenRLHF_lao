@@ -26,7 +26,7 @@ def get_train_ds_config(
         "offload_param": {"device": device},
         "offload_optimizer": {
             "device": "cpu" if adam_offload else "none",
-            "pin_memory": False,  # 禁用pin_memory以避免CUDA错误
+            "pin_memory": False,  # Disable pin_memory to avoid CUDA errors
         },
         "sub_group_size": "auto",
         "stage3_max_live_parameters": "auto",
