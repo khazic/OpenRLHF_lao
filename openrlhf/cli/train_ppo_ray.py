@@ -465,17 +465,6 @@ if __name__ == "__main__":
         default=None,
         help="sampling probs for datasets",
     )
-    parser.add_argument(
-        "--cache_dataset_to_disk",
-        action="store_true",
-        help="Cache loaded datasets to Arrow format on disk for faster subsequent starts",
-    )
-    parser.add_argument(
-        "--dataset_cache_dir",
-        type=str,
-        default=None,
-        help="Directory to store cached Arrow datasets (defaults to ~/.cache/openrlhf/datasets)",
-    )
     parser.add_argument("--prompt_split", type=str, default="train")
     parser.add_argument("--eval_dataset", type=str, default=None, help="Path to the evaluation dataset")
     parser.add_argument("--eval_split", type=str, default="train")

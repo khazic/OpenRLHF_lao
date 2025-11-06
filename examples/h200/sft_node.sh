@@ -59,9 +59,7 @@ openrlhf.cli.train_sft \
    --learning_rate 5e-6 \
    --gradient_checkpointing \
    --packing_samples \
-   --apply_chat_template \
-   --cache_dataset_to_disk \
-   --dataset_cache_dir /mnt/data/liuchonghan/dataset_cache
+   --apply_chat_template
 EOF
 
 export DS_SSH_PASSWORD=1

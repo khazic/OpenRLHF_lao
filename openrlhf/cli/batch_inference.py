@@ -317,17 +317,6 @@ if __name__ == "__main__":
     # Custom dataset
     parser.add_argument("--dataset", type=str, default=None)
     parser.add_argument("--dataset_probs", type=str, default=None)
-    parser.add_argument(
-        "--cache_dataset_to_disk",
-        action="store_true",
-        help="Cache loaded datasets to Arrow format on disk for faster subsequent starts",
-    )
-    parser.add_argument(
-        "--dataset_cache_dir",
-        type=str,
-        default=None,
-        help="Directory to store cached Arrow datasets (defaults to ~/.cache/openrlhf/datasets)",
-    )
     parser.add_argument("--input_key", type=str, default="input", help="JSON dataset key")
     parser.add_argument("--output_key", type=str, default="output", help="JSON dataset key")
     parser.add_argument(

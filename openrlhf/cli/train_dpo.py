@@ -275,17 +275,6 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_probs", type=str, default=None, help="Sampling probabilities for training datasets")
     parser.add_argument("--eval_dataset", type=str, default=None, help="Path to the evaluation dataset")
     parser.add_argument("--dataset_split", type=str, default="train")
-    parser.add_argument(
-        "--cache_dataset_to_disk",
-        action="store_true",
-        help="Cache loaded datasets to Arrow format on disk for faster subsequent starts",
-    )
-    parser.add_argument(
-        "--dataset_cache_dir",
-        type=str,
-        default=None,
-        help="Directory to store cached Arrow datasets (defaults to ~/.cache/openrlhf/datasets)",
-    )
     parser.add_argument("--eval_split", type=str, default="test")
     parser.add_argument("--max_samples", type=int, default=1000000, help="Maximum number of samples to use")
 
