@@ -65,6 +65,9 @@ class DeepspeedStrategy(ABC):
         self.use_ds_universal_ckpt = getattr(args, "use_ds_universal_ckpt", False)
         self.grad_accum_dtype = getattr(args, "grad_accum_dtype", None)
         self.overlap_comm = getattr(args, "overlap_comm", False)
+        self.zero_quantized_weights = getattr(args, "zero_quantized_weights", False)
+        self.zero_quantized_nontrainable_weights = getattr(args, "zero_quantized_nontrainable_weights", False)
+        self.zero_quantized_gradients = getattr(args, "zero_quantized_gradients", False)
         self.deepcompile = getattr(args, "deepcompile", False)
         self.ds_tensor_parallel_size = getattr(args, "ds_tensor_parallel_size", 1)
         self.ring_attn_size = getattr(self.args, "ring_attn_size", 1)
@@ -259,6 +262,9 @@ class DeepspeedStrategy(ABC):
             bf16=self.bf16,
             max_norm=self.max_norm,
             zpg=self.zpg,
+            zero_quantized_weights=self.zero_quantized_weights,
+            zero_quantized_nontrainable_weights=self.zero_quantized_nontrainable_weights,
+            zero_quantized_gradients=self.zero_quantized_gradients,
             grad_accum_dtype=self.grad_accum_dtype,
             overlap_comm=self.overlap_comm,
             use_ds_universal_ckpt=self.use_ds_universal_ckpt,

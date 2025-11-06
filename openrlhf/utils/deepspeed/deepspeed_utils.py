@@ -11,6 +11,9 @@ def get_train_ds_config(
     bf16=True,
     max_norm=1.0,
     zpg=8,
+    zero_quantized_weights=False,
+    zero_quantized_nontrainable_weights=False,
+    zero_quantized_gradients=False,
     grad_accum_dtype=None,
     overlap_comm=False,
     use_ds_universal_ckpt=False,
@@ -33,8 +36,9 @@ def get_train_ds_config(
         "reduce_bucket_size": "auto",
         # ZeRO++
         "zero_hpz_partition_size": zpg,
-        "zero_quantized_weights": False,
-        "zero_quantized_gradients": False,
+        "zero_quantized_weights": zero_quantized_weights,
+        "zero_quantized_nontrainable_weights": zero_quantized_nontrainable_weights,
+        "zero_quantized_gradients": zero_quantized_gradients,
     }
     if overlap_comm:
         zero_opt_dict["overlap_comm"] = True

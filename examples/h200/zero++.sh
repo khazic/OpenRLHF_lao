@@ -29,9 +29,16 @@ export TRANSFORMERS_NO_ADVISORY_WARNINGS=1
 
 export NCCL_DEBUG=ERROR  
 export NCCL_DEBUG_SUBSYS=NONE  
+export NCCL_DEBUG=ERROR  
+export NCCL_DEBUG_SUBSYS=NONE  
 
-export NCCL_SOCKET_TIMEOUT=3600000
-export NCCL_HEARTBEAT_TIMEOUT_SEC=300
+export TORCH_NCCL_BLOCKING_WAIT=1
+export TORCH_NCCL_ASYNC_ERROR_HANDLING=0
+export TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=3600
+export TORCH_NCCL_WATCHDOG_THREAD_HEARTBEATS_PER_SEC=0.1
+
+export NCCL_SOCKET_TIMEOUT=1800000
+export NCCL_HEARTBEAT_TIMEOUT_SEC=1800
 export NCCL_CONNECT_TIMEOUT=600
 export NCCL_BLOCKING_WAIT=1
 export NCCL_ASYNC_ERROR_HANDLING=1
@@ -47,43 +54,46 @@ export WORLD_SIZE=120
 export LOCAL_RANK=0
 
 echo "🚀   Master node IP: $MASTER_ADDR"
-echo "🚀   Total nodes:158"
+echo "🚀   Total nodes:15"
 echo "🚀   Total GPUs:120 (8 per node)"
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 8192 \
-   --dataset /mnt/data/liuchonghan/main_dataset_arrow \
-   --train_batch_size 2880 \
+   --dataset /mnt/data/liuchonghan/72b_dataset_arrow \
+   --train_batch_size 1440 \
    --input_key question \
    --output_key response \
-   --micro_train_batch_size 12 \
+   --micro_train_batch_size 6 \
    --max_samples 50000000 \
    --pretrain /mnt/data/liuchonghan/Qwen72b_cpt \
-   --save_path ./checkpoint/RLer_Qwen72ckpt_1103 \
+   --save_path ./checkpoint/RLer_Qwen72ckpt_standardloss \
+   --ckpt_path ./checkpoint/RLer_Qwen72ckpt_standardloss/checkpoints_sft \
    --save_steps -1 \
    --logging_steps 2 \
    --eval_steps -1 \
+   --save_steps 500 \
+   --max_ckpt_num 2 \
    --packing_samples \
    --max_epochs 1 \
-   --sft_loss encouraging \
+   --sft_loss standard \
    --bf16 \
    --attn_implementation flash_attention_2 \
-   --learning_rate 7e-6 \
+   --learning_rate 3e-6 \
    --gradient_checkpointing \
    --apply_chat_template \
    --lr_warmup_ratio 0.05 \
    --ds_tensor_parallel_size 4 \
    --zero_stage 2 \
-   --zpg 30 \
+   --zpg 15 \
    --overlap_comm 
 EOF
-
+  #  --load_checkpoint \
 export DS_SSH_PASSWORD=1
 export DS_SSH_PASSWORD_AUTH=true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOSTFILE="${SCRIPT_DIR}/hostfile_nodes.txt"
+HOSTFILE="${SCRIPT_DIR}/hostfile_4nodes.txt"
 DEEPSPEED_BIN="${OPENRLHF_PREFIX}/bin/deepspeed"
 
 "$DEEPSPEED_BIN" --hostfile "$HOSTFILE" \

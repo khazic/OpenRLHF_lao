@@ -67,6 +67,32 @@ def load_data_from_path(input_path):
     
     return all_data
 
+def cleanup_dataset_caches(output_path, *datasets_to_cleanup):
+    """Remove Hugging Face cache artifacts and temporary files after verification."""
+    for dataset_obj in datasets_to_cleanup:
+        if dataset_obj is None:
+            continue
+        try:
+            dataset_obj.cleanup_cache_files()
+        except Exception as exc:
+            print(f"    Warning: Failed to cleanup dataset cache via API: {exc}")
+    
+    removed_files = 0
+    for pattern in ('cache-*', 'tmp*'):
+        pattern_path = os.path.join(output_path, pattern)
+        for cache_path in glob.glob(pattern_path):
+            try:
+                if os.path.isdir(cache_path):
+                    shutil.rmtree(cache_path)
+                else:
+                    os.remove(cache_path)
+                removed_files += 1
+            except OSError as exc:
+                print(f"    Warning: Failed to delete temporary file {os.path.basename(cache_path)}: {exc}")
+    
+    if removed_files:
+        print(f"🧹 Removed {removed_files} leftover cache files")
+
 def load_single_file(file_path):
     data = []
     
@@ -200,6 +226,8 @@ def preprocess_gemini_dataset(input_path, output_path):
             loaded_dataset = load_from_disk(output_path)
             print(f"✅ Verification successful! Loaded {len(loaded_dataset)} records")
             print("📝 Sample data:", loaded_dataset[0])
+            print("🧹 Cleaning up temporary cache files...")
+            cleanup_dataset_caches(output_path, dataset, loaded_dataset)
         except Exception as e:
             print(f"❌ Verification failed: {e}")
             return False

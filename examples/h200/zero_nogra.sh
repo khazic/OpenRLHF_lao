@@ -66,7 +66,6 @@ openrlhf.cli.train_sft \
    --eval_steps -1 \
    --packing_samples \
    --max_epochs 1 \
-   --sft_loss encouraging \
    --bf16 \
    --attn_implementation flash_attention_2 \
    --learning_rate 7e-6 \
