@@ -60,6 +60,7 @@ echo "🚀   Total GPUs:120 (8 per node)"
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 8192 \
+   --save_hf_ckpt \
    --dataset /mnt/data/liuchonghan/72b_dataset_arrow \
    --train_batch_size 1440 \
    --input_key question \
@@ -68,8 +69,7 @@ openrlhf.cli.train_sft \
    --max_samples 50000000 \
    --pretrain /mnt/data/liuchonghan/Qwen72b_cpt \
    --save_path ./checkpoint/RLer_Qwen72ckpt_standardloss \
-   --ckpt_path ./checkpoint/RLer_Qwen72ckpt_standardloss/checkpoints_sft \
-   --save_steps -1 \
+   --ckpt_path ./ckpt/RLer_Qwen72ckpt_standardloss/checkpoints_sft \
    --logging_steps 2 \
    --eval_steps -1 \
    --save_steps 500 \
@@ -79,7 +79,7 @@ openrlhf.cli.train_sft \
    --sft_loss standard \
    --bf16 \
    --attn_implementation flash_attention_2 \
-   --learning_rate 3e-6 \
+   --learning_rate 2e-6 \
    --gradient_checkpointing \
    --apply_chat_template \
    --lr_warmup_ratio 0.05 \

@@ -41,22 +41,26 @@ echo "🚀  Total GPUs: 120 (8 per node)"
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
-   --max_len 64000 \
-   --dataset /mnt/data/liuchonghan/longcontext_dataset \
-   --train_batch_size 128 \
+   --max_len 48000 \
+   --dataset /mnt/data/liuchonghan/OpenRLHF_lao/examples/h200/anqi/combine-33w_sft_arrow \
+   --train_batch_size 240 \
    --input_key question \
    --output_key response \
    --micro_train_batch_size 1 \
    --max_samples 90000000 \
+   --save_hf_ckpt \
    --pretrain /mnt/data/liuchonghan/Qwen7b_cpt \
-   --save_path ./checkpoint/RLer_Qwen7bckpt_long_standardloss \
-   --save_steps 3000 \
+   --save_path ./checkpoint/RLer_Qwen7bckpt_long_standardloss_anqi \
+   --ckpt_path ./ckpt/RLer_Qwen7bckpt_long_standardloss_anqi \
    --logging_steps 2 \
    --eval_steps -1 \
+   --save_steps 500 \
+   --max_ckpt_num 2 \
    --max_epochs 1 \
    --bf16 \
+   --lr_warmup_ratio 0.05 \
    --attn_implementation flash_attention_2 \
-   --learning_rate 5e-6 \
+   --learning_rate 2e-6 \
    --gradient_checkpointing \
    --packing_samples \
    --apply_chat_template \
