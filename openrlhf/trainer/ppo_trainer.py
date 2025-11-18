@@ -290,9 +290,15 @@ class BasePPOTrainer(ABC):
             # First collect all prompts and labels
             all_prompts = []
             all_labels = []
+            all_metadata = []
             prompt_to_datasource = {}  # Dictionary to store mapping between prompts and their data sources
 
-            for datasources, prompts, labels in eval_dataloader:
+            for batch_data in eval_dataloader:
+                if len(batch_data) == 4:
+                    datasources, prompts, labels, metadata = batch_data
+                    all_metadata.extend(metadata)
+                else:
+                    datasources, prompts, labels = batch_data
                 all_prompts.extend(prompts)
                 all_labels.extend(labels)
                 # Create mapping for each prompt to its corresponding data source
@@ -304,7 +310,8 @@ class BasePPOTrainer(ABC):
             generate_kwargs["temperature"] = temperature
             generate_kwargs["n_samples_per_prompt"] = n_samples_per_prompt
             samples_list = self.samples_generator.generate_samples(
-                all_prompts, all_labels, remote_reward_model=self.remote_reward_model, **generate_kwargs
+                all_prompts, all_labels, metadata=all_metadata if all_metadata else None, 
+                remote_reward_model=self.remote_reward_model, **generate_kwargs
             )
 
             # duplicate prompts and labels for each sample
@@ -523,10 +530,15 @@ class PPOTrainer(BasePPOTrainer):
 
             filtered_samples = []
             number_of_samples = 0
-            for _, rand_prompts, labels in self.prompts_dataloader:
+            for batch_data in self.prompts_dataloader:
+                if len(batch_data) == 4:
+                    _, rand_prompts, labels, metadata = batch_data
+                else:
+                    _, rand_prompts, labels = batch_data
+                    metadata = None
                 remote_reward_model = self.remote_reward_model if self.args.dynamic_filtering else None
                 rollout_samples = self.samples_generator.generate_samples(
-                    rand_prompts, labels, remote_reward_model=remote_reward_model, **self.generate_kwargs
+                    rand_prompts, labels, metadata=metadata, remote_reward_model=remote_reward_model, **self.generate_kwargs
                 )
                 pbar.update()
 
@@ -567,7 +579,36 @@ class PPOTrainer(BasePPOTrainer):
                 sample0 = self.tokenizer.batch_decode(
                     experiences[0].sequences[0].unsqueeze(0), skip_special_tokens=True
                 )
-                print(sample0)
+                
+                # 打印训练批次的样本和评分统计
+                print(f"\n{'='*100}")
+                print(f"🎓 Training Step {steps} - Batch Summary")
+                print(f"{'='*100}")
+                
+                # 计算并打印评分统计
+                all_rewards = []
+                for exp in experiences:
+                    if "reward" in exp.info:
+                        all_rewards.extend(exp.info["reward"].tolist())
+                
+                if all_rewards:
+                    avg_reward = sum(all_rewards) / len(all_rewards)
+                    min_reward = min(all_rewards)
+                    max_reward = max(all_rewards)
+                    print(f"📊 Rewards: avg={avg_reward:.3f}, min={min_reward:.3f}, max={max_reward:.3f}, count={len(all_rewards)}")
+                
+                # 打印前3个样本的详细信息
+                print(f"\n🔍 Sample Details (showing first 3):")
+                for i, exp in enumerate(experiences[:3]):
+                    decoded = self.tokenizer.batch_decode(exp.sequences, skip_special_tokens=True)
+                    reward = exp.info.get("reward", [0])[0]
+                    reward_val = reward.item() if hasattr(reward, 'item') else reward
+                    
+                    print(f"\n  Sample {i+1}:")
+                    print(f"    Text: {decoded[0][:150]}..." if len(decoded[0]) > 150 else f"    Text: {decoded[0]}")
+                    print(f"    💯 Reward: {reward_val:.3f}")
+                
+                print(f"{'='*100}\n")
 
                 # balance experiences across dp
                 if args.use_dynamic_batch:

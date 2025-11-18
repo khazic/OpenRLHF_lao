@@ -62,15 +62,21 @@ class PromptDataset(Dataset):
         self.prompts = []
         self.labels = []
         self.datasources = []
+        self.metadata = []  # 保存原始数据的额外字段
         for data in tqdm(dataset, desc="Preprocessing data", disable=not self.strategy.is_rank_0()):
             prompt, label = preprocess_data(data, input_template, input_key, label_key, apply_chat_template, disable_thinking)
             self.prompts.append(prompt)
             self.labels.append(label)
             self.datasources.append(data.get("datasource", "default"))
+            # 保存可能需要的额外字段（如 lang, transed_prompt 等）
+            self.metadata.append({
+                "lang": data.get("lang", ""),
+                "transed_prompt": data.get(input_key or "input", prompt),  # 原始输入
+            })
 
     def __len__(self):
         length = len(self.prompts)
         return length
 
     def __getitem__(self, idx):
-        return self.datasources[idx], self.prompts[idx], self.labels[idx]
+        return self.datasources[idx], self.prompts[idx], self.labels[idx], self.metadata[idx]

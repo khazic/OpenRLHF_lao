@@ -3,6 +3,8 @@ import asyncio
 import json
 import re
 from typing import List, Optional
+from datetime import datetime
+import os
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -13,6 +15,11 @@ from tqdm.asyncio import tqdm_asyncio
 from openrlhf.utils.logging_utils import init_logger
 
 logger = init_logger(__name__)
+
+# 创建详细评分日志文件
+SCORING_LOG_DIR = "./grm_scoring_logs"
+os.makedirs(SCORING_LOG_DIR, exist_ok=True)
+SCORING_LOG_FILE = os.path.join(SCORING_LOG_DIR, f"scoring_details_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl")
 
 CRITIC_PROMPT_TEMPLATE = """
 请你充当客观、严格的评审员，根据参考答案对助手的回答进行评分。
@@ -147,18 +154,120 @@ def build_app(proxy: AsyncGRMProxy) -> FastAPI:
         langs = data.get("langs", [])
         answers = data.get("answers", [])
         
-        if not transed_prompts and "queries" in data:
+        if not transed_prompts and "query" in data:
             queries = data.get("query", [])
             prompts = data.get("prompts", [])
             labels = data.get("labels", [])
             transed_prompts = prompts
-            responses = [q[len(p):] if len(q) > len(p) else q for q, p in zip(queries, prompts)]
+            responses = [q[len(p):] if q.startswith(p) else q for q, p in zip(queries, prompts)]
             answers = labels
             langs = [""] * len(transed_prompts)
+            logger.info(f"📥 Using legacy format conversion: {len(queries)} samples")
 
-        logger.info(f"Received /get_reward with {len(transed_prompts)} items")
+        logger.info(f"📥 Received /get_reward with {len(transed_prompts)} items")
+        logger.info(f"    - Prompts: {len(transed_prompts)}")
+        logger.info(f"    - Responses: {len(responses)}")
+        logger.info(f"    - Languages: {len(langs)}")
+        logger.info(f"    - Answers: {len(answers)}")
+        
         rewards = await proxy.score_batch(transed_prompts, responses, langs, answers)
 
+        if len(rewards) > 0:
+            avg_score = sum(rewards) / len(rewards)
+            min_score = min(rewards)
+            max_score = max(rewards)
+            median_score = sorted(rewards)[len(rewards) // 2]
+            
+            # 统计分数分布
+            score_distribution = {}
+            for score in rewards:
+                score_bucket = int(score)
+                score_distribution[score_bucket] = score_distribution.get(score_bucket, 0) + 1
+            
+            # 统计语言分布和每种语言的平均分
+            lang_stats = {}
+            for i in range(len(rewards)):
+                lang = langs[i] if i < len(langs) else "unknown"
+                if lang not in lang_stats:
+                    lang_stats[lang] = {"count": 0, "total_score": 0.0, "scores": []}
+                lang_stats[lang]["count"] += 1
+                lang_stats[lang]["total_score"] += rewards[i]
+                lang_stats[lang]["scores"].append(rewards[i])
+            
+            # 统计 response 长度
+            response_lengths = [len(r) for r in responses]
+            avg_response_len = sum(response_lengths) / len(response_lengths) if response_lengths else 0
+            min_response_len = min(response_lengths) if response_lengths else 0
+            max_response_len = max(response_lengths) if response_lengths else 0
+            
+            logger.info("\n" + "="*100)
+            logger.info("📊 SCORING STATISTICS")
+            logger.info("="*100)
+            logger.info(f"Total Samples: {len(rewards)}")
+            logger.info(f"Score Stats: avg={avg_score:.3f}, median={median_score:.2f}, min={min_score:.1f}, max={max_score:.1f}")
+            logger.info(f"Response Length: avg={avg_response_len:.0f}, min={min_response_len}, max={max_response_len}")
+            
+            logger.info(f"\n📈 Score Distribution:")
+            for score_bucket in sorted(score_distribution.keys()):
+                count = score_distribution[score_bucket]
+                percentage = count / len(rewards) * 100
+                bar = "█" * int(percentage / 2)
+                logger.info(f"  Score {score_bucket}: {count:4d} ({percentage:5.1f}%) {bar}")
+            
+            logger.info(f"\n🌍 Language Distribution:")
+            for lang, stats in sorted(lang_stats.items(), key=lambda x: x[1]["count"], reverse=True):
+                count = stats["count"]
+                avg = stats["total_score"] / count
+                percentage = count / len(rewards) * 100
+                min_s = min(stats["scores"])
+                max_s = max(stats["scores"])
+                logger.info(f"  {lang or 'N/A':15s}: {count:4d} samples ({percentage:5.1f}%) | avg={avg:.2f}, min={min_s:.1f}, max={max_s:.1f}")
+            
+            timestamp = datetime.now().isoformat()
+            with open(SCORING_LOG_FILE, 'a', encoding='utf-8') as f:
+                for i in range(len(rewards)):
+                    sample_data = {
+                        "timestamp": timestamp,
+                        "sample_id": i + 1,
+                        "total_samples": len(rewards),
+                        "prompt": transed_prompts[i] if i < len(transed_prompts) else "",
+                        "response": responses[i] if i < len(responses) else "",
+                        "response_length": len(responses[i]) if i < len(responses) else 0,
+                        "language": langs[i] if i < len(langs) else "",
+                        "reference": answers[i] if i < len(answers) else "",
+                        "score": float(rewards[i])
+                    }
+                    f.write(json.dumps(sample_data, ensure_ascii=False) + '\n')
+            
+            logger.info(f"\n💾 Saved {len(rewards)} samples to {SCORING_LOG_FILE}")
+            
+            logger.info("\n" + "="*100)
+            logger.info(f"📝 DETAILED SAMPLES (showing first 20):")
+            logger.info("="*100)
+            for i in range(min(20, len(rewards))):
+                prompt_text = transed_prompts[i] if i < len(transed_prompts) else "N/A"
+                response_text = responses[i] if i < len(responses) else "N/A"
+                lang_text = langs[i] if i < len(langs) else "N/A"
+                answer_text = answers[i] if i < len(answers) else "N/A"
+                
+                prompt_display = prompt_text[:150] + "..." if len(prompt_text) > 150 else prompt_text
+                response_display = response_text[:300] + "..." if len(response_text) > 300 else response_text
+                answer_display = answer_text[:150] + "..." if len(answer_text) > 150 else answer_text
+                
+                logger.info(f"\n  {'='*90}")
+                logger.info(f"  【Sample {i+1}/{len(rewards)}】")
+                logger.info(f"    🌍 Language: {lang_text}")
+                logger.info(f"    💯 Score: {rewards[i]:.2f}")
+                logger.info(f"    📏 Response Length: {len(response_text)} chars")
+                logger.info(f"    ❓ Prompt: {prompt_display}")
+                logger.info(f"    💬 Response: {response_display}")
+                logger.info(f"    ✅ Reference: {answer_display}")
+            
+            if len(rewards) > 20:
+                logger.info(f"\n  {'='*90}")
+                logger.info(f"  ... and {len(rewards) - 20} more samples (see log file for details)")
+            logger.info("\n" + "="*100 + "\n")
+        
         result = {
             "rewards": rewards,
             "scores": rewards,
@@ -185,7 +294,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--eos_str", type=str, default="<|im_end|>")
     parser.add_argument("--require_eos", action="store_true", default=False)
-    parser.add_argument("--strip_think", action="store_true", default=True)
+    parser.add_argument("--strip_think", action="store_true", default=False, help="Enable stripping think tags from model response")
 
     parser.add_argument("--score_min", type=float, default=0.0)
     parser.add_argument("--score_max", type=float, default=5.0)

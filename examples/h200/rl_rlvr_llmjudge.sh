@@ -2,20 +2,18 @@
 set -x
 
 REPO_ROOT="/mnt/data/liuchonghan/OpenRLHF_lao"
-REMOTE_RM_URL="${REPO_ROOT}/examples/python/reward_func.py"
 
 if [[ "${CONDA_DEFAULT_ENV:-}" != "openrlhf" ]]; then
     echo "Warning: conda environment is not openrlhf, current environment: ${CONDA_DEFAULT_ENV:-none}"
-    source /mnt/data/liuchonghan/env/etc/profile.d/conda.sh
-    conda activate openrlhf
+    source ~/.bashrc
 fi
 
 export PYTHONPATH="${REPO_ROOT}:${PYTHONPATH:-}"
 
-if ! python3 -c "import ray" 2>/dev/null; then
-    echo "Installing Ray..."
-    pip install ray
-fi
+export NCCL_DEBUG=INFO
+export NCCL_IB_DISABLE=0
+export NCCL_IB_GID_INDEX=3
+export NCCL_SOCKET_IFNAME=eth0
 
 python3 -m openrlhf.cli.train_ppo_ray \
    --ref_num_nodes 10 \
@@ -29,20 +27,20 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --vllm_num_engines 10 \
    --vllm_tensor_parallel_size 8 \
    --colocate_all_models \
-   --vllm_gpu_memory_utilization 0.6 \
+   --vllm_gpu_memory_utilization 0.8 \
    --advantage_estimator gae \
-   --pretrain /mnt/data/liuchonghan/Qwen7b_cpt \
-   --remote_rm_url http://11.131.209.97:8000/reward \
-   --save_path ./checkpoint/RL_rlvr_llmjudge \
-   --ckpt_path ./checkpoint/RL_rlvr_llmjudge_ckpt \
+   --pretrain /mnt/data/liuchonghan/checkpoint_model/RLer_policy_model \
+   --remote_rm_url http://10.181.107.66:5000/get_reward \
+   --save_path ./checkpoint/RL_llmjudge \
+   --ckpt_path ./checkpoint/RL_llmjudge_ckpt \
    --save_hf_ckpt \
-   --rollout_batch_size 128 \
+   --rollout_batch_size 80 \
    --n_samples_per_prompt 16 \
-   --train_batch_size 256 \
-   --micro_train_batch_size 16 \
-   --micro_rollout_batch_size 8 \
+   --train_batch_size 80 \
+   --micro_train_batch_size 2 \
+   --micro_rollout_batch_size 1 \
    --max_epochs 1 \
-   --prompt_max_len 4096 \
+   --prompt_max_len 2048 \
    --max_samples 900000 \
    --generate_max_len 8192 \
    --zero_stage 3 \
@@ -50,8 +48,9 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --actor_learning_rate 5e-7 \
    --critic_learning_rate 5e-7 \
    --init_kl_coef 0.01 \
-   --prompt_data /mnt/data/liuchonghan/prompt_dataset \
-   --input_key context_messages \
+   --prompt_data /mnt/data/liuchonghan/prompt_benchmark_arrow \
+   --input_key transed_prompt \
+   --label_key answer \
    --apply_chat_template \
    --normalize_reward \
    --gradient_checkpointing \
@@ -59,5 +58,4 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --vllm_sync_backend nccl \
    --enforce_eager \
    --vllm_enable_sleep \
-   --deepspeed_enable_sleep 
-
+   --deepspeed_enable_sleep

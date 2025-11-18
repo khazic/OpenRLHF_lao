@@ -253,7 +253,7 @@ class SamplesGenerator:
         self.prompt_max_len = prompt_max_len
 
     @torch.no_grad()
-    def generate_samples(self, all_prompts: List[str], all_labels, **generate_kwargs) -> List[Experience]:
+    def generate_samples(self, all_prompts: List[str], all_labels, metadata=None, **generate_kwargs) -> List[Experience]:
         """
         Generate samples and return in batches.
 
@@ -266,7 +266,7 @@ class SamplesGenerator:
 
             batch_vllm_engine_call(self.vllm_engines, "wake_up")
 
-        rollout_samples = self._generate_vllm(all_prompts, all_labels, **generate_kwargs)
+        rollout_samples = self._generate_vllm(all_prompts, all_labels, metadata=metadata, **generate_kwargs)
 
         # vLLM offload when vllm_enable_sleep
         if self.strategy.args.vllm_enable_sleep:
@@ -295,7 +295,7 @@ class SamplesGenerator:
         )
         return {k: v.to(device) for k, v in batch.items()}
 
-    def _generate_vllm(self, all_prompts: List[str], all_labels, **kwargs) -> List[Experience]:
+    def _generate_vllm(self, all_prompts: List[str], all_labels, metadata=None, **kwargs) -> List[Experience]:
         """Generate samples using vLLM engine.
 
         Args:
@@ -329,6 +329,9 @@ class SamplesGenerator:
         n_samples_per_prompt = kwargs.pop("n_samples_per_prompt", args.n_samples_per_prompt)
         all_prompts = sum([[prompt] * n_samples_per_prompt for prompt in all_prompts], [])
         all_labels = sum([[label] * n_samples_per_prompt for label in all_labels], [])
+        # Expand metadata to match the expanded prompts and labels
+        if metadata:
+            metadata = sum([[m] * n_samples_per_prompt for m in metadata], [])
         all_prompt_token_ids = self.tokenize_fn(all_prompts, self.prompt_max_len, padding=False)["input_ids"]
 
         # Distribute requests to engines and collect responses
@@ -415,9 +418,34 @@ class SamplesGenerator:
             all_labels = sum([s.labels for s in samples_list], [])
 
             # Get rewards info from remote model
-            rewards_info = ray.get(remote_reward_model.get_rewards.remote(all_queries, all_prompts, all_labels))
+            rewards_info = ray.get(remote_reward_model.get_rewards.remote(all_queries, all_prompts, all_labels, metadata))
             # Process rewards and scores
             update_samples_with_rewards(rewards_info, samples_list)
+            
+            # 打印生成样本和评分信息
+            print("\n" + "="*100)
+            print(f"🎯 Generated {len(samples_list)} samples with rewards")
+            print("="*100)
+            for idx, sample in enumerate(samples_list[:5]):  # 只打印前5个样本
+                prompt = sample.prompts[0] if sample.prompts else ""
+                response = self.tokenizer.decode(sample.sequences[0], skip_special_tokens=True)
+                # 从response中提取生成的部分（去掉prompt）
+                if prompt and response.startswith(prompt):
+                    generated_text = response[len(prompt):].strip()
+                else:
+                    generated_text = response
+                
+                reward = sample.rewards[0].item() if hasattr(sample.rewards[0], 'item') else sample.rewards[0]
+                score = sample.scores[0].item() if hasattr(sample.scores[0], 'item') else sample.scores[0]
+                
+                print(f"\n📝 Sample {idx + 1}:")
+                print(f"  Prompt: {prompt[:100]}..." if len(prompt) > 100 else f"  Prompt: {prompt}")
+                print(f"  Generated: {generated_text[:200]}..." if len(generated_text) > 200 else f"  Generated: {generated_text}")
+                print(f"  💯 Score: {score:.3f} | Reward: {reward:.3f}")
+            
+            if len(samples_list) > 5:
+                print(f"\n... and {len(samples_list) - 5} more samples")
+            print("="*100 + "\n")
 
         return samples_list
 
