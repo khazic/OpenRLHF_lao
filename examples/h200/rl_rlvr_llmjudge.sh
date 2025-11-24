@@ -34,9 +34,9 @@ python3 -m openrlhf.cli.train_ppo_ray \
    --save_path ./checkpoint/RL_llmjudge \
    --ckpt_path ./checkpoint/RL_llmjudge_ckpt \
    --save_hf_ckpt \
-   --rollout_batch_size 80 \
+   --rollout_batch_size 1280 \
    --n_samples_per_prompt 16 \
-   --train_batch_size 80 \
+   --train_batch_size 160 \
    --micro_train_batch_size 2 \
    --micro_rollout_batch_size 1 \
    --max_epochs 1 \

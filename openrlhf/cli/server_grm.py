@@ -16,7 +16,6 @@ from openrlhf.utils.logging_utils import init_logger
 
 logger = init_logger(__name__)
 
-# 创建详细评分日志文件
 SCORING_LOG_DIR = "./grm_scoring_logs"
 os.makedirs(SCORING_LOG_DIR, exist_ok=True)
 SCORING_LOG_FILE = os.path.join(SCORING_LOG_DIR, f"scoring_details_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl")
@@ -83,19 +82,37 @@ class AsyncGRMProxy:
         self.strip_think = strip_think
 
     async def _score_with_chat(self, prepared_input: str) -> str:
-        try:
-            resp = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prepared_input}],
-            )
-            content = resp.choices[0].message.content or ""
-            return content.strip()
-        except Exception as e:
-            logger.debug(f"ChatCompletions failed: {e}")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                resp = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prepared_input}],
+                    max_tokens=20,  # Scoring only needs a few tokens
+                    temperature=0.0,  # Deterministic for scoring
+                )
+                content = resp.choices[0].message.content or ""
+                return content.strip()
+            except Exception as e:
+                logger.warning(f"ChatCompletions failed (attempt {attempt+1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)  # Wait 2 seconds before retry
+                else:
+                    logger.error(f"All retries failed: {e}")
         return ""
 
     async def _score_one(self, transed_prompt: str, response: str, lang: str, answer: str) -> float:
         text = response.strip()
+        
+        # Truncate overly long responses to avoid exceeding vLLM's max_model_len
+        # vLLM max_model_len = 24576 tokens
+        # Reserve ~4000 tokens for prompt template, question, and reference answer
+        # Allow up to ~20000 tokens (approximately 60000 characters) for the response
+        MAX_RESPONSE_CHARS = 60000
+        if len(text) > MAX_RESPONSE_CHARS:
+            text = text[:MAX_RESPONSE_CHARS] + "\n...[内容过长已截断]"
+            logger.debug(f"Response truncated from {len(response)} to {MAX_RESPONSE_CHARS} chars")
+        
         if self.require_eos:
             if not text.endswith(self.eos_str):
                 return self.default_score

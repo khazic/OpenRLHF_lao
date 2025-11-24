@@ -48,35 +48,35 @@ export NCCL_IB_RETRY_CNT=7
 export DS_TIMEOUT=1800
 export DS_ELASTIC_TIMEOUT=1800
 
-export MASTER_ADDR=22.25.243.29
+export MASTER_ADDR=22.7.229.22
 export MASTER_PORT=29501
-export WORLD_SIZE=120
+export WORLD_SIZE=64
 export LOCAL_RANK=0
 
 echo "🚀   Master node IP: $MASTER_ADDR"
-echo "🚀   Total nodes:15"
-echo "🚀   Total GPUs:120 (8 per node)"
+echo "🚀   Total nodes:8"
+echo "🚀   Total GPUs:64 (8 per node)"
 
 read -r -d '' training_commands <<EOF
 openrlhf.cli.train_sft \
    --max_len 8192 \
    --save_hf_ckpt \
-   --dataset /mnt/data/liuchonghan/72b_dataset_arrow \
-   --train_batch_size 1440 \
+   --dataset /mnt/data/liuchonghan/kk_arrow \
+   --train_batch_size 384 \
    --input_key question \
    --output_key response \
    --micro_train_batch_size 6 \
    --max_samples 50000000 \
-   --pretrain /mnt/data/liuchonghan/Qwen72b_cpt \
-   --save_path ./checkpoint/RLer_Qwen72ckpt_standardloss \
-   --ckpt_path ./ckpt/RLer_Qwen72ckpt_standardloss/checkpoints_sft \
+   --pretrain /mnt/data/liuchonghan/OpenRLHF_lao/examples/h200/checkpoint/RLer_qwen72b_ckpt70b_200w_0277 \
+   --save_path ./checkpoint/RLer_qwen72b_ckpt70b_200w_0277_70w_2e \
+   --ckpt_path ./ckpt/RLer_qwen72b_ckpt70b_200w_0277_70w_2e \
    --logging_steps 2 \
    --eval_steps -1 \
-   --save_steps 500 \
+   --save_steps 2000 \
    --max_ckpt_num 2 \
    --packing_samples \
-   --max_epochs 1 \
-   --sft_loss standard \
+   --max_epochs 2 \
+   --sft_loss encouraging \
    --bf16 \
    --attn_implementation flash_attention_2 \
    --learning_rate 2e-6 \
