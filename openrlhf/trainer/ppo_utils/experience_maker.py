@@ -647,8 +647,10 @@ class RemoteExperienceMaker(ABC):
             # Reward Model
             rewards_list = sum(ray.get(r_refs)[::duplicate_factor], [])
             for i, samples in enumerate(samples_list):
-                samples.rewards = rewards_list[i]
-                samples.info["reward"] = rewards_list[i]
+                # Ensure rewards are tensors, not lists
+                reward_tensor = rewards_list[i] if isinstance(rewards_list[i], torch.Tensor) else torch.as_tensor(rewards_list[i])
+                samples.rewards = reward_tensor
+                samples.info["reward"] = reward_tensor
 
         assert (
             len(samples_list) == len(action_log_probs_list) == len(base_action_log_probs_list) == len(value_list)
