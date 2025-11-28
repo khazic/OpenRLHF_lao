@@ -127,7 +127,7 @@ def load_single_file(file_path):
     
     return data
 
-def preprocess_gemini_dataset(input_path, output_path):
+def preprocess_gemini_dataset(input_path, output_path, force=False):
     if not os.path.exists(input_path):
         print(f"Error: Input path does not exist: {input_path}")
         return False
@@ -136,6 +136,9 @@ def preprocess_gemini_dataset(input_path, output_path):
     print(f"Output path: {output_path}")
     
     if os.path.exists(output_path):
+        if not force:
+            print(f"Output directory already exists at {output_path}, skipping conversion.")
+            return True
         print(f"Removing existing output directory: {output_path}")
         shutil.rmtree(output_path)
     
@@ -251,7 +254,7 @@ def main():
     
     args = parser.parse_args()
     
-    success = preprocess_gemini_dataset(args.input, args.output)
+    success = preprocess_gemini_dataset(args.input, args.output, force=args.force)
     
     if success:
         print("\n🎉 Data preprocessing completed successfully!")

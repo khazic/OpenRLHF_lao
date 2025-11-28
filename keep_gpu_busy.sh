@@ -21,8 +21,8 @@
 #                       Note: Higher intensity may cause GPU throttling/heating
 
 GPU_IDS=${1:-"0,1,2,3,4,5,6,7"}
-MEMORY_FRACTION=${2:-0.5}
-COMPUTE_INTENSITY=${3:-0.5}
+MEMORY_FRACTION=${2:-0.8}
+COMPUTE_INTENSITY=${3:-0.8}
 
 echo "Starting GPU Keep-Alive Script..."
 echo "GPU IDs: $GPU_IDS"

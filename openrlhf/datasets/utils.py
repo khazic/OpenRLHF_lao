@@ -2,12 +2,84 @@ import glob
 import json
 import os
 import tempfile
+from typing import Optional
 
 from datasets import concatenate_datasets, interleave_datasets, load_dataset, load_from_disk
+
+try:
+    from openrlhf.utils.data_arrow import preprocess_gemini_dataset
+except ImportError:  # pragma: no cover - tooling fallback
+    preprocess_gemini_dataset = None
 
 
 def exist_and_not_none(d, key):
     return key in d and not d[key] is None
+
+
+def _is_arrow_dataset_dir(path: str) -> bool:
+    if not os.path.isdir(path):
+        return False
+    dataset_info = os.path.join(path, "dataset_info.json")
+    state_file = os.path.join(path, "state.json")
+    return os.path.isfile(dataset_info) or os.path.isfile(state_file)
+
+
+def _contains_json_files(path: str) -> bool:
+    for pattern in ("*.json", "*.jsonl"):
+        if glob.glob(os.path.join(path, pattern)):
+            return True
+        if glob.glob(os.path.join(path, "**", pattern), recursive=True):
+            return True
+    return False
+
+
+def _build_arrow_output_path(original_path: str, cache_root: Optional[str]) -> str:
+    normalized = original_path.rstrip("/\\")
+    if not normalized:
+        normalized = original_path
+    if cache_root:
+        os.makedirs(cache_root, exist_ok=True)
+        base_name = os.path.basename(normalized) or "dataset"
+        sanitized = base_name.replace(os.sep, "_").replace(".", "_")
+        return os.path.join(cache_root, sanitized + "_arrow")
+    return normalized + "_arrow"
+
+
+def _maybe_preprocess_to_arrow(dataset_path: str, strategy) -> str:
+    if preprocess_gemini_dataset is None:
+        return dataset_path
+    if not dataset_path:
+        return dataset_path
+    if not os.path.exists(dataset_path):
+        return dataset_path
+    if _is_arrow_dataset_dir(dataset_path):
+        return dataset_path
+
+    should_process = False
+    if os.path.isfile(dataset_path):
+        ext = os.path.splitext(dataset_path)[-1].lower()
+        should_process = ext in {".json", ".jsonl"}
+    elif os.path.isdir(dataset_path):
+        should_process = _contains_json_files(dataset_path)
+
+    if not should_process:
+        return dataset_path
+
+    strategy_args = getattr(strategy, "args", None)
+    arrow_cache_dir = getattr(strategy_args, "arrow_cache_dir", None)
+    force_arrow = getattr(strategy_args, "force_arrow_preprocess", False)
+    arrow_output_path = _build_arrow_output_path(dataset_path, arrow_cache_dir)
+
+    if _is_arrow_dataset_dir(arrow_output_path):
+        return arrow_output_path
+
+    _strategy_print(strategy, f"Auto converting {dataset_path} to Arrow dataset at {arrow_output_path}")
+    success = preprocess_gemini_dataset(dataset_path, arrow_output_path, force=force_arrow)
+    if success and _is_arrow_dataset_dir(arrow_output_path):
+        return arrow_output_path
+
+    _strategy_print(strategy, f"Failed to preprocess {dataset_path}, falling back to original path")
+    return dataset_path
 
 
 def _strategy_print(strategy, message: str):
@@ -53,6 +125,11 @@ def blending_datasets(
         data_dir = dataset_entry.split("@")[1].strip() if "@" in dataset_entry else None
         dataset_path = dataset_entry.split("@")[0].strip()
         dataset_basename = os.path.basename(dataset_path)
+
+        preprocessed_path = _maybe_preprocess_to_arrow(dataset_path, strategy)
+        if preprocessed_path != dataset_path:
+            dataset_path = preprocessed_path
+            data_dir = None
 
         ext = os.path.splitext(dataset)[-1]
         # local python script

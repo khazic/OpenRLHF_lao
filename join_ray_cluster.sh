@@ -3,7 +3,7 @@ set -e
 
 HEAD_NODE="10.181.107.66"
 RAY_PORT="6379"
-NUM_CPUS=96
+NUM_CPUS=128
 NUM_GPUS=8
 
 OPENRLHF_PREFIX="/mnt/data/liuchonghan/env/openrlhf"
