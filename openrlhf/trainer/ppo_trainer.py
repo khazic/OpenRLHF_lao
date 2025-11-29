@@ -495,7 +495,7 @@ class PPOTrainer(BasePPOTrainer):
         if self.args.eval_steps == -1:
             self.args.eval_steps = float("inf")  # do not evaluate
         if self.args.save_steps == -1:
-            self.args.save_steps = float("inf")  # do not save ckpt
+            self.args.save_steps = float("inf")  # do not save ckpt, user should specify --save_steps
 
     def fit(
         self,

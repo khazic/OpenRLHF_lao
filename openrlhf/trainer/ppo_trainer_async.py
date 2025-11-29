@@ -151,10 +151,10 @@ class GenerateSamplesActor(BasePPOTrainer):
 @ray.remote
 class TrainingActor(BasePPOTrainer):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
         self.signal_actor = kwargs.pop("signal_actor")
         # Assign after super().__init__ to avoid being overwritten by parent
         self.remote_reward_model = kwargs.pop("remote_reward_model")
+        super().__init__(*args, **kwargs)
 
         if self.kl_target:
             self.kl_ctl = AdaptiveKLController(self.init_kl_coef, self.kl_target, self.kl_horizon)
@@ -297,7 +297,7 @@ class PPOTrainerAsync:
         if self.args.eval_steps == -1:
             self.args.eval_steps = float("inf")  # do not evaluate
         if self.args.save_steps == -1:
-            self.args.save_steps = float("inf")  # do not save ckpt
+            self.args.save_steps = float("inf")  # do not save ckpt, user should specify --save_steps
 
         self.trainer_actor = TrainingActor.remote(
             pretrain,
