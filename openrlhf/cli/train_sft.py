@@ -6,6 +6,7 @@ from datetime import datetime
 from transformers.trainer import get_scheduler
 
 from openrlhf.datasets import SFTDataset
+from openrlhf.datasets.sft_dataset import DynamicBatchSampler
 from openrlhf.datasets.utils import blending_datasets
 from openrlhf.models import Actor
 from openrlhf.trainer.sft_trainer import SFTTrainer
@@ -65,13 +66,44 @@ def train(args):
         multiturn=args.multiturn,
     )
     # prepare dataloader
-    train_dataloader = strategy.setup_dataloader(
-        train_dataset,
-        args.micro_train_batch_size,
-        True,
-        True,
-        train_dataset.collate_fn,
-    )
+    if args.use_dynamic_batch:
+        # 使用动态 batch，根据 max_tokens_per_gpu 自动分组
+        from torch.utils.data import DataLoader
+        import torch.distributed as dist
+        
+        # 获取分布式训练信息
+        if dist.is_initialized():
+            num_replicas = dist.get_world_size()
+            rank = dist.get_rank()
+        else:
+            num_replicas = 1
+            rank = 0
+        
+        dynamic_sampler = DynamicBatchSampler(
+            train_dataset,
+            max_tokens_per_gpu=args.max_tokens_per_gpu,
+            shuffle=True,
+            seed=args.seed,
+            num_replicas=num_replicas,
+            rank=rank,
+        )
+        train_dataloader = DataLoader(
+            train_dataset,
+            batch_sampler=dynamic_sampler,
+            collate_fn=train_dataset.collate_fn,
+            num_workers=4,
+            pin_memory=True,
+        )
+        strategy.print(f"[Dynamic Batch] Rank {rank}/{num_replicas}: {len(dynamic_sampler)} batches, max_tokens_per_gpu={args.max_tokens_per_gpu}")
+    else:
+        # 原有的 dataloader 设置（固定 batch size）
+        train_dataloader = strategy.setup_dataloader(
+            train_dataset,
+            args.micro_train_batch_size,
+            True,
+            True,
+            train_dataset.collate_fn,
+        )
 
     eval_dataloader = None
     if getattr(args, "eval_dataset", None):
@@ -99,7 +131,11 @@ def train(args):
         )
 
     # scheduler
-    num_update_steps_per_epoch = len(train_dataset) // args.train_batch_size
+    if args.use_dynamic_batch:
+        # 使用动态 batch 时，num_update_steps_per_epoch 等于 dataloader 中的 batch 数量
+        num_update_steps_per_epoch = len(train_dataloader)
+    else:
+        num_update_steps_per_epoch = len(train_dataset) // args.train_batch_size
     max_steps = math.ceil(args.max_epochs * num_update_steps_per_epoch)
 
     scheduler = get_scheduler(
@@ -253,6 +289,12 @@ if __name__ == "__main__":
 
     # packing SFT samples without CrossAttention
     parser.add_argument("--packing_samples", action="store_true", default=False)
+    
+    # Dynamic batch: automatically group samples to ensure total tokens per batch <= max_tokens_per_gpu
+    parser.add_argument("--use_dynamic_batch", action="store_true", default=False, 
+                        help="Enable dynamic batch sizing based on token count")
+    parser.add_argument("--max_tokens_per_gpu", type=int, default=16384,
+                        help="Maximum tokens per GPU when using dynamic batch")
 
     # custom dataset
     parser.add_argument("--dataset", type=str, default=None, help="Path to the training dataset")

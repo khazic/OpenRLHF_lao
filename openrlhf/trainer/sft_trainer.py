@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 from openrlhf.models import EncouragingLoss, SFTLoss
 from openrlhf.utils.distributed_sampler import DistributedSampler
+from openrlhf.datasets.sft_dataset import DynamicBatchSampler
 
 
 class SFTTrainer(ABC):
@@ -131,6 +132,9 @@ class SFTTrainer(ABC):
                 self.train_dataloader.sampler.set_epoch(
                     epoch, consumed_samples=0 if epoch > start_epoch else consumed_samples
                 )
+            # 支持 DynamicBatchSampler
+            if hasattr(self.train_dataloader, 'batch_sampler') and isinstance(self.train_dataloader.batch_sampler, DynamicBatchSampler):
+                self.train_dataloader.batch_sampler.set_epoch(epoch)
 
             step_bar = tqdm(
                 range(self.train_dataloader.__len__()),
