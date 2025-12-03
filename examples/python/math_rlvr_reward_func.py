@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import contextlib
 import re
+import json
+import os
 from typing import Iterable, List
 
 import torch
@@ -120,26 +122,50 @@ def reward_func(queries, prompts, labels, **kwargs):
     if not queries:
         raise ValueError("`queries` is empty, cannot compute rewards.")
 
+    # Normalize to lists to keep ordering/indexing stable
+    queries = [str(query) for query in queries]
+    prompts = [str(prompt) for prompt in prompts]
+
     # Extract response-only texts (remove prompt prefix)
     responses = _response_only_texts(queries, prompts)
     ground_truths = [str(label) for label in labels]
 
     # Compute scores for each response
     scores_list = []
-    for response, gt in zip(responses, ground_truths):
+    zero_score_indices = []
+    zero_score_details = []
+    for idx, (response, gt) in enumerate(zip(responses, ground_truths)):
         score = compute_score(response, gt)
         scores_list.append(score)
+        if score <= 0.0:
+            zero_score_indices.append(idx)
+            zero_score_details.append(
+                {
+                    "index": idx,
+                    "prompt": str(prompts[idx]),
+                    "response": response,
+                    "ground_truth": gt,
+                    "boxed_answer": extract_boxed_answer(response),
+                }
+            )
 
     # Convert to tensors
     reward_tensor = torch.tensor(scores_list, dtype=torch.float32)
+
+    log_path = os.getenv("ZERO_SCORE_LOG_PATH")
+    if log_path and zero_score_details:
+        with contextlib.suppress(OSError):
+            with open(log_path, "a", encoding="utf-8") as log_file:
+                for detail in zero_score_details:
+                    log_file.write(json.dumps(detail, ensure_ascii=False))
+                    log_file.write("\n")
 
     return {
         "rewards": reward_tensor,
         "scores": reward_tensor,
         "extra_logs": {
             "math_rlvr_score": reward_tensor,
-            "num_correct": (reward_tensor > 0.5).sum().item(),
-            "accuracy": (reward_tensor > 0.5).float().mean().item(),
+            "zero_score_indices": zero_score_indices,
+            "zero_score_details": zero_score_details,
         },
     }
-
