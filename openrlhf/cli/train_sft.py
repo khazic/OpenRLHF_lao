@@ -6,6 +6,7 @@ from datetime import datetime
 from transformers.trainer import get_scheduler
 
 from openrlhf.datasets import SFTDataset
+from openrlhf.datasets.sft_dataset import DynamicBatchSampler
 from openrlhf.datasets.utils import blending_datasets
 from openrlhf.models import Actor
 from openrlhf.trainer.sft_trainer import SFTTrainer
@@ -65,13 +66,41 @@ def train(args):
         multiturn=args.multiturn,
     )
     # prepare dataloader
-    train_dataloader = strategy.setup_dataloader(
-        train_dataset,
-        args.micro_train_batch_size,
-        True,
-        True,
-        train_dataset.collate_fn,
-    )
+    if args.use_dynamic_batch:
+        from torch.utils.data import DataLoader
+        import torch.distributed as dist
+        
+        if dist.is_initialized():
+            num_replicas = dist.get_world_size()
+            rank = dist.get_rank()
+        else:
+            num_replicas = 1
+            rank = 0
+        
+        dynamic_sampler = DynamicBatchSampler(
+            train_dataset,
+            max_tokens_per_gpu=args.max_tokens_per_gpu,
+            shuffle=True,
+            seed=args.seed,
+            num_replicas=num_replicas,
+            rank=rank,
+        )
+        train_dataloader = DataLoader(
+            train_dataset,
+            batch_sampler=dynamic_sampler,
+            collate_fn=train_dataset.collate_fn,
+            num_workers=4,
+            pin_memory=True,
+        )
+        strategy.print(f"[Dynamic Batch] Rank {rank}/{num_replicas}: {len(dynamic_sampler)} batches, max_tokens_per_gpu={args.max_tokens_per_gpu}")
+    else:
+        train_dataloader = strategy.setup_dataloader(
+            train_dataset,
+            args.micro_train_batch_size,
+            True,
+            True,
+            train_dataset.collate_fn,
+        )
 
     eval_dataloader = None
     if getattr(args, "eval_dataset", None):
@@ -98,8 +127,10 @@ def train(args):
             eval_dataset.collate_fn,
         )
 
-    # scheduler
-    num_update_steps_per_epoch = len(train_dataset) // args.train_batch_size
+    if args.use_dynamic_batch:
+        num_update_steps_per_epoch = len(train_dataloader)
+    else:
+        num_update_steps_per_epoch = len(train_dataset) // args.train_batch_size
     max_steps = math.ceil(args.max_epochs * num_update_steps_per_epoch)
 
     scheduler = get_scheduler(
@@ -110,10 +141,8 @@ def train(args):
         scheduler_specific_kwargs={"min_lr": args.learning_rate * 0.1},
     )
 
-    # prepare models
     (model, optim, scheduler) = strategy.prepare((model, optim, scheduler))
 
-    # load checkpoint
     consumed_samples = 0
     if args.load_checkpoint and os.path.exists(args.ckpt_path):
         _, states = strategy.load_ckpt(model.model, args.ckpt_path)
@@ -122,7 +151,6 @@ def train(args):
 
     os.makedirs(args.save_path, exist_ok=True)
 
-    # configure Trainer
     trainer = SFTTrainer(
         model=model,
         strategy=strategy,
@@ -183,6 +211,24 @@ if __name__ == "__main__":
         help="Model data type",
     )
     parser.add_argument("--zpg", type=int, default=1, help="ZeRO++ max partition size")
+    parser.add_argument(
+        "--zero_quantized_weights",
+        action="store_true",
+        default=False,
+        help="Enable ZeRO++ weight quantization for parameter communication",
+    )
+    parser.add_argument(
+        "--zero_quantized_nontrainable_weights",
+        action="store_true",
+        default=False,
+        help="Enable ZeRO++ quantization for non-trainable weights (e.g., LoRA adapters)",
+    )
+    parser.add_argument(
+        "--zero_quantized_gradients",
+        action="store_true",
+        default=False,
+        help="Enable ZeRO++ gradient quantization",
+    )
     parser.add_argument("--adam_offload", action="store_true", default=False, help="Offload Adam Optimizer")
     parser.add_argument(
         "--attn_implementation",
@@ -207,6 +253,19 @@ if __name__ == "__main__":
     parser.add_argument("--lr_scheduler", type=str, default="cosine_with_min_lr")
     parser.add_argument("--l2", type=float, default=0, help="weight decay loss")
     parser.add_argument("--adam_betas", type=float, nargs=2, default=(0.9, 0.95), help="Betas for Adam optimizer")
+    parser.add_argument(
+        "--sft_loss",
+        type=str,
+        default="standard",
+        choices=["standard", "encouraging"],
+        help="Loss function to use for supervised fine-tuning.",
+    )
+    parser.add_argument(
+        "--encouraging_loss_log_end",
+        type=float,
+        default=0.5,
+        help="log_end hyperparameter for the encouraging loss.",
+    )
 
     # ring-attention
     parser.add_argument("--ring_attn_size", type=int, default=1, help="Ring attention group size")
@@ -228,6 +287,12 @@ if __name__ == "__main__":
 
     # packing SFT samples without CrossAttention
     parser.add_argument("--packing_samples", action="store_true", default=False)
+    
+    # Dynamic batch: automatically group samples to ensure total tokens per batch <= max_tokens_per_gpu
+    parser.add_argument("--use_dynamic_batch", action="store_true", default=False, 
+                        help="Enable dynamic batch sizing based on token count")
+    parser.add_argument("--max_tokens_per_gpu", type=int, default=16384,
+                        help="Maximum tokens per GPU when using dynamic batch")
 
     # custom dataset
     parser.add_argument("--dataset", type=str, default=None, help="Path to the training dataset")

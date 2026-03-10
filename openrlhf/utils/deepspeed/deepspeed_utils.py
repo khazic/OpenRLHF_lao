@@ -11,6 +11,9 @@ def get_train_ds_config(
     param_dtype="bf16",
     max_norm=1.0,
     zpg=8,
+    zero_quantized_weights=False,
+    zero_quantized_nontrainable_weights=False,
+    zero_quantized_gradients=False,
     grad_accum_dtype=None,
     overlap_comm=False,
     use_ds_universal_ckpt=False,
@@ -23,7 +26,7 @@ def get_train_ds_config(
         "offload_param": {"device": device},
         "offload_optimizer": {
             "device": "cpu" if adam_offload else "none",
-            "pin_memory": True,
+            "pin_memory": False,  # Disable pin_memory to avoid CUDA errors
         },
         "sub_group_size": "auto",
         "stage3_max_live_parameters": "auto",
@@ -33,8 +36,9 @@ def get_train_ds_config(
         "reduce_bucket_size": "auto",
         # ZeRO++
         "zero_hpz_partition_size": zpg,
-        "zero_quantized_weights": False,
-        "zero_quantized_gradients": False,
+        "zero_quantized_weights": zero_quantized_weights,
+        "zero_quantized_nontrainable_weights": zero_quantized_nontrainable_weights,
+        "zero_quantized_gradients": zero_quantized_gradients,
     }
     if overlap_comm:
         zero_opt_dict["overlap_comm"] = True
@@ -169,12 +173,24 @@ def offload_deepspeed_states(model, pin_memory=True, non_blocking=True):
             # OffloadStateTypeEnum.lp_params,
         ]
 
-    model.optimizer.offload_states(
-        include=offload_state_types,
-        device=OffloadDeviceEnum.cpu,
-        pin_memory=pin_memory,
-        non_blocking=non_blocking,
-    )
+    try:
+        model.optimizer.offload_states(
+            include=offload_state_types,
+            device=OffloadDeviceEnum.cpu,
+            pin_memory=pin_memory,
+            non_blocking=non_blocking,
+        )
+    except RuntimeError as err:
+        if pin_memory and "invalid argument" in str(err):
+            # Retry without pinning when CUDA rejects pin_memory (common on some drivers)
+            model.optimizer.offload_states(
+                include=offload_state_types,
+                device=OffloadDeviceEnum.cpu,
+                pin_memory=False,
+                non_blocking=non_blocking,
+            )
+        else:
+            raise
     model.empty_partition_cache()
     torch.cuda.empty_cache()
     torch.distributed.barrier()

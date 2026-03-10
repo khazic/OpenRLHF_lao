@@ -108,6 +108,9 @@ def make_experience_batch(items: List[BufferItem], packing_samples=False) -> Exp
         # Convert to tensor if all values are numeric
         if all(isinstance(v, (int, float)) for v in values):
             kwargs["info"][key] = torch.tensor(values)
+        elif all(isinstance(v, torch.Tensor) for v in values):
+            # Stack tensors together
+            kwargs["info"][key] = torch.cat(values, dim=0) if values[0].dim() > 0 else torch.stack(values)
         else:
             kwargs["info"][key] = values
 

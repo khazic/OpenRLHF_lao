@@ -72,6 +72,38 @@ class SFTLoss(nn.Module):
         return loss
 
 
+class EncouragingLoss(nn.Module):
+    """
+    Encouraging Loss that reshapes the log-probabilities to encourage high-confidence predictions.
+    Based on log(1 - p) bonus with an optional linear tail controlled via log_end.
+    """
+
+    def __init__(self, log_end: float = 0.5, token_level_loss: bool = True, eps: float = 1e-5):
+        super().__init__()
+        self.log_end = log_end
+        self.token_level_loss = token_level_loss
+        self.eps = eps
+
+    def forward(self, per_token_logps: torch.Tensor, loss_mask: torch.Tensor) -> torch.Tensor:
+        probs = per_token_logps.exp()
+        bonus = torch.log((1 - probs).clamp(min=self.eps))
+
+        if self.log_end != 1.0:
+            log_end_tensor = probs.new_tensor(self.log_end)
+            y_log_end = torch.log((1 - log_end_tensor).clamp(min=self.eps))
+            bonus_after_log_end = (probs - log_end_tensor) / (log_end_tensor - 1.0) + y_log_end
+            bonus = torch.where(probs > log_end_tensor, bonus_after_log_end, bonus)
+
+        per_token_loss = -(per_token_logps - bonus)
+        loss = (
+            masked_mean(per_token_loss, loss_mask, dim=None)
+            if self.token_level_loss
+            else masked_mean(per_token_loss, loss_mask, dim=-1).mean()
+        )
+
+        return loss
+
+
 class PolicyLoss(nn.Module):
     """
     Policy Loss for PPO

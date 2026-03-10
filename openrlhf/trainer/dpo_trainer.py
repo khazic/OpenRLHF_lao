@@ -108,7 +108,8 @@ class DPOTrainer(ABC):
         if args.eval_steps == -1:
             args.eval_steps = num_update_steps_per_epoch  # Evaluate once per epoch
         if args.save_steps == -1:
-            args.save_steps = float("inf")  # do not save ckpt
+            args.save_steps = num_update_steps_per_epoch  # Save once per epoch
+        self.num_update_steps_per_epoch = num_update_steps_per_epoch
 
         # Restore step and start_epoch
         step = consumed_samples // args.train_batch_size * self.strategy.accumulated_gradient + 1
@@ -225,7 +226,12 @@ class DPOTrainer(ABC):
         # save ckpt
         # TODO: save best model on dev, use loss/perplexity on whole dev dataset as metric
         if global_step % args.save_steps == 0:
-            tag = f"global_step{global_step}"
+            # 如果 save_steps == num_update_steps_per_epoch，说明是按 epoch 保存
+            if args.save_steps == self.num_update_steps_per_epoch:
+                epoch = global_step // self.num_update_steps_per_epoch
+                tag = f"epoch{epoch}"
+            else:
+                tag = f"global_step{global_step}"
             if not self.disable_ds_ckpt:
                 self.strategy.save_ckpt(
                     self.model.model, args.ckpt_path, tag, args.max_ckpt_num, args.max_ckpt_mem, client_states

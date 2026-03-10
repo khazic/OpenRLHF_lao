@@ -89,8 +89,8 @@ class RewardDataset(Dataset):
             self.process_data, remove_columns=dataset.column_names, num_proc=num_processors
         )
 
-        # Filter out None values if necessary
-        processed_dataset = processed_dataset.filter(lambda x: x["prompt"] is not None)
+        # Filter out None values and samples where chosen==rejected
+        processed_dataset = processed_dataset.filter(lambda x: x["prompt"] is not None and x["chosen"] is not None and x["reject"] is not None)
 
         # Store the processed data in class attributes
         self.prompts = processed_dataset["prompt"]

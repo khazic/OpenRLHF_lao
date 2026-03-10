@@ -272,13 +272,13 @@ if __name__ == "__main__":
     parser.add_argument("--max_ckpt_mem", type=int, default=1e8)
     parser.add_argument("--load_checkpoint", action="store_true", default=False)
     parser.add_argument(
-        "--use_ds_universal_ckpt", action="store_true", help="Use deepspeed universal checkpoint", default=False
+        "--use_ds_universal_ckpt", action="store_true", help="Use deepspeed universal checkpoint", default=True
     )
 
     # DeepSpeed
     parser.add_argument("--local_rank", type=int, default=-1, help="local_rank for deepspeed")
     parser.add_argument("--zero_stage", type=int, default=2, help="DeepSpeed ZeRO stage")
-    parser.add_argument("--gradient_checkpointing", action="store_true", default=False)
+    parser.add_argument("--gradient_checkpointing", action="store_true", default=True)
     parser.add_argument("--deepcompile", action="store_true", default=False)
     parser.add_argument(
         "--param_dtype",
@@ -291,6 +291,24 @@ if __name__ == "__main__":
     parser.add_argument("--enable_ema", action="store_true", help="Enable EMA checkpoint for the model.")
     parser.add_argument("--ema_beta", type=float, default=0.992, help="EMA beta coefficient")
     parser.add_argument("--zpg", type=int, default=1, help="ZeRO++ max partition size")
+    parser.add_argument(
+        "--zero_quantized_weights",
+        action="store_true",
+        default=False,
+        help="Enable ZeRO++ weight quantization for parameter communication",
+    )
+    parser.add_argument(
+        "--zero_quantized_nontrainable_weights",
+        action="store_true",
+        default=False,
+        help="Enable ZeRO++ quantization for non-trainable weights (e.g., LoRA adapters)",
+    )
+    parser.add_argument(
+        "--zero_quantized_gradients",
+        action="store_true",
+        default=False,
+        help="Enable ZeRO++ gradient quantization",
+    )
     parser.add_argument("--adam_offload", action="store_true", default=False, help="Offload Adam Optimizer")
     parser.add_argument("--actor_init_on_gpu", action="store_true", default=False)
     parser.add_argument(
@@ -367,8 +385,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--save_value_network", action="store_true", default=False, help="Save critic model")
     parser.add_argument("--actor_learning_rate", type=float, default=1e-6)
-    parser.add_argument("--critic_learning_rate", type=float, default=9e-6)
-    parser.add_argument("--lr_warmup_ratio", type=float, default=0.03)
+    parser.add_argument("--critic_learning_rate", type=float, default=1e-6)
+    parser.add_argument("--lr_warmup_ratio", type=float, default=0.05)
     parser.add_argument("--lr_scheduler", type=str, default="cosine_with_min_lr")
     parser.add_argument("--kl_target", type=float, default=None)
     parser.add_argument("--kl_horizon", type=int, default=10000)
@@ -377,7 +395,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--kl_estimator",
         type=str,
-        default="k1",
+        default="k3",
         choices=["k1", "k2", "k3"],
         help=(
             "In GRPO, k3 is utilized as the loss function, while k2, when used as the loss, is nearly equivalent to k1."
@@ -387,19 +405,40 @@ if __name__ == "__main__":
     parser.add_argument(
         "--entropy_loss_coef",
         type=float,
-        default=None,
+        default=0.0,
         help="Entropy loss coef, set to 0 means only enable entropy logs",
+    )
+    parser.add_argument(
+        "--entropy_var_coef",
+        type=float,
+        default=0.0005,
+        help="Entropy variance regularization coefficient, penalizes inconsistent entropy across samples"
+    )
+    parser.add_argument(
+        "--tokenizer_config_path",
+        type=str,
+        default=None,
+        help="Path to tokenizer config JSON file containing added_tokens_decoder for new token monitoring"
+    )
+    parser.add_argument(
+        "--auto_detect_original_vocab",
+        action="store_true",
+        help="Automatically detect original vocabulary size from tokenizer config"
+    )
+    parser.add_argument(
+        "--enable_new_token_monitoring",
+        action="store_true",
+        help="Enable comprehensive monitoring of newly added tokens during RL training"
     )
     parser.add_argument("--adam_betas", type=float, nargs=2, default=(0.9, 0.95), help="Betas for Adam optimizer")
     parser.add_argument("--reward_clip_range", type=float, nargs=2, default=(-10, 10), help="Reward clip range")
 
-    # Reinforce/GRPO, etc
     parser.add_argument(
         "--advantage_estimator",
         type=str,
-        choices=["gae", "reinforce", "rloo", "reinforce_baseline", "group_norm", "dr_grpo"],
+        choices=["gae", "reinforce", "rloo", "reinforce_baseline", "group_norm", "dr_grpo", "xpo"],
         default="gae",
-        help="Choose advantage estimation method: gae, reinforce, rloo, reinforce_baseline, group_norm, dr_grpo",
+        help="Choose advantage estimation method: gae, reinforce, rloo, reinforce_baseline, group_norm, dr_grpo, xpo",
     )
     parser.add_argument("--use_kl_loss", action="store_true", default=False, help="whether to use KL loss from GRPO")
     parser.add_argument(
@@ -420,7 +459,6 @@ if __name__ == "__main__":
         "Truncated sample rewards are scaled by this coefficient to encourage proper stopping.",
     )
 
-    # Context Parallel
     parser.add_argument("--ring_attn_size", type=int, default=1, help="Ring attention group size")
     parser.add_argument(
         "--ring_head_stride",
@@ -462,6 +500,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--apply_chat_template", action="store_true", default=False, help="Use HF tokenizer chat template"
     )
+    parser.add_argument(
+        "--disable_thinking", action="store_true", default=False, help="Disable thinking mode for non-thinking models like Qwen3"
+    )
 
     # wandb parameters
     parser.add_argument("--use_wandb", type=str, default=None)
@@ -483,9 +524,6 @@ if __name__ == "__main__":
     # TensorBoard parameters
     parser.add_argument("--use_tensorboard", type=str, default=None, help="TensorBoard logging path")
 
-    # performance tuning
-    parser.add_argument("--perf", action="store_true", default=False)
-
     # ModelScope parameters
     parser.add_argument("--use_ms", action="store_true", default=False)
 
@@ -506,7 +544,7 @@ if __name__ == "__main__":
         else:
             args.critic_pretrain = args.pretrain
 
-    if args.advantage_estimator in ["rloo", "reinforce_baseline", "group_norm"]:
+    if args.advantage_estimator in ["rloo", "reinforce_baseline", "group_norm", "xpo"]:
         assert args.n_samples_per_prompt > 1, f"{args.advantage_estimator} requires n_samples_per_prompt > 1"
 
     if args.remote_rm_url:

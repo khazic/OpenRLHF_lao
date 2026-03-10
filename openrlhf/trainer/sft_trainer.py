@@ -5,8 +5,9 @@ import torch
 from torch.optim import Optimizer
 from tqdm import tqdm
 
-from openrlhf.models import SFTLoss
+from openrlhf.models import EncouragingLoss, SFTLoss
 from openrlhf.utils.distributed_sampler import DistributedSampler
+from openrlhf.datasets.sft_dataset import DynamicBatchSampler
 
 
 class SFTTrainer(ABC):
@@ -61,7 +62,14 @@ class SFTTrainer(ABC):
         self.save_hf_ckpt = save_hf_ckpt
         self.disable_ds_ckpt = disable_ds_ckpt
 
-        self.loss_fn = SFTLoss()
+        loss_type = getattr(self.args, "sft_loss", "standard")
+        if loss_type == "encouraging":
+            log_end = getattr(self.args, "encouraging_loss_log_end", 0.5)
+            self.loss_fn = EncouragingLoss(log_end=log_end)
+        elif loss_type == "standard":
+            self.loss_fn = SFTLoss()
+        else:
+            raise ValueError(f"Unsupported sft_loss value: {loss_type}")
 
         # Mixtral 8*7b
         self.aux_loss = self.args.aux_loss_coef > 1e-8
@@ -105,7 +113,8 @@ class SFTTrainer(ABC):
         if args.eval_steps == -1:
             args.eval_steps = num_update_steps_per_epoch  # Evaluate once per epoch
         if args.save_steps == -1:
-            args.save_steps = float("inf")  # do not save ckpt
+            args.save_steps = num_update_steps_per_epoch  # Save once per epoch
+        self.num_update_steps_per_epoch = num_update_steps_per_epoch
 
         # Restore step and start_epoch
         step = consumed_samples // args.train_batch_size * self.strategy.accumulated_gradient + 1
@@ -123,6 +132,9 @@ class SFTTrainer(ABC):
                 self.train_dataloader.sampler.set_epoch(
                     epoch, consumed_samples=0 if epoch > start_epoch else consumed_samples
                 )
+            # 支持 DynamicBatchSampler
+            if hasattr(self.train_dataloader, 'batch_sampler') and isinstance(self.train_dataloader.batch_sampler, DynamicBatchSampler):
+                self.train_dataloader.batch_sampler.set_epoch(epoch)
 
             step_bar = tqdm(
                 range(self.train_dataloader.__len__()),
@@ -204,7 +216,12 @@ class SFTTrainer(ABC):
         # save ckpt
         # TODO: save best model on dev, use loss/perplexity on whole dev dataset as metric
         if global_step % args.save_steps == 0:
-            tag = f"global_step{global_step}"
+            # 如果 save_steps == num_update_steps_per_epoch，说明是按 epoch 保存
+            if args.save_steps == self.num_update_steps_per_epoch:
+                epoch = global_step // self.num_update_steps_per_epoch
+                tag = f"epoch{epoch}"
+            else:
+                tag = f"global_step{global_step}"
             if not self.disable_ds_ckpt:
                 self.strategy.save_ckpt(
                     self.model.model, args.ckpt_path, tag, args.max_ckpt_num, args.max_ckpt_mem, client_states

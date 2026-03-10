@@ -152,11 +152,30 @@ class CriticPPOTrainer(ABC):
             self.strategy.optimizer_step(self.critic_optim, self.critic, self.critic_scheduler, name="critic")
 
         # status
+        value_mean = masked_mean(values, experience.action_mask).detach()
         status = {
             "critic_loss": critic_loss.detach().item(),
-            "values": masked_mean(values, experience.action_mask).detach().item(),
+            "critic_total_loss": loss.detach().item(),
+            "critic_value_mean": value_mean.item(),
             "critic_lr": self.critic_scheduler.get_last_lr()[0],
         }
+
+        if self.aux_loss:
+            status["critic_aux_loss"] = aux_loss.detach().item()
+
+        # Track target/ value dispersion for diagnostics
+        mask = experience.action_mask.float()
+        denom = mask.sum().clamp(min=1.0)
+        returns_tensor = experience.returns.float()
+        target_mean = (returns_tensor * mask).sum() / denom
+        target_var = ((returns_tensor - target_mean) ** 2 * mask).sum() / denom
+        status["critic_target_mean"] = target_mean.item()
+        status["critic_target_std"] = target_var.clamp(min=0.0).sqrt().item()
+
+        values_tensor = values.float()
+        value_var = ((values_tensor - value_mean) ** 2 * mask).sum() / denom
+        status["critic_value_std"] = value_var.clamp(min=0.0).sqrt().item()
+
         return status
 
 

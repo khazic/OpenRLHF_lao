@@ -1,7 +1,7 @@
-from typing import Callable
+from typing import Callable, List
 
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Sampler
 
 from openrlhf.utils.utils import zero_pad_sequences
 
@@ -227,3 +227,133 @@ class SFTDataset(Dataset):
         attention_masks = zero_pad_sequences(attention_masks, "right")
         loss_masks = zero_pad_sequences(loss_masks, "right")
         return input_ids, attention_masks, loss_masks
+
+
+class DynamicBatchSampler(Sampler):
+    """
+    Dynamic batch sampler that groups samples to ensure total tokens per batch <= max_tokens.
+    
+    This sampler uses First Fit Decreasing algorithm to pack samples into batches,
+    ensuring each batch's total token count doesn't exceed max_tokens_per_gpu.
+    
+    可以和 --packing_samples 组合使用：
+    - 只用 --use_dynamic_batch：动态 batch size，普通 padding
+    - 只用 --packing_samples：固定 batch size，unpad packing（原有行为）
+    - 两者都用：动态 batch size + unpad packing（最安全高效）
+    
+    Example:
+        max_tokens_per_gpu = 8000
+        Sample lengths: [4000, 3500, 3800, 4096]
+        
+        Result batches:
+        - Batch 1: [sample_0, sample_1] = 7500 tokens
+        - Batch 2: [sample_2, sample_3] = 7896 tokens
+    """
+    
+    def __init__(
+        self,
+        dataset: SFTDataset,
+        max_tokens_per_gpu: int,
+        shuffle: bool = True,
+        seed: int = 42,
+        num_replicas: int = 1,
+        rank: int = 0,
+    ):
+        self.dataset = dataset
+        self.max_tokens_per_gpu = max_tokens_per_gpu
+        self.shuffle = shuffle
+        self.seed = seed
+        self.epoch = 0
+        self.num_replicas = num_replicas  # 分布式训练的总进程数
+        self.rank = rank  # 当前进程的 rank
+        
+        # 预先计算每个样本的长度（复用已有的 tokenize 结果）
+        self.sample_lengths = self._compute_sample_lengths()
+        # 计算 batch 分组
+        self.batches = self._create_batches()
+    
+    def _compute_sample_lengths(self) -> List[int]:
+        """计算每个样本的 token 长度（使用近似估计，避免重复 tokenize）"""
+        lengths = []
+        for idx in range(len(self.dataset)):
+            prompt = self.dataset.prompts[idx]
+            response = self.dataset.responses[idx]
+            
+            # 使用字符长度的近似估计（平均 4 字符 = 1 token）
+            # 或者直接用 prompt_ids_len + response 估计
+            if not self.dataset.pretrain_mode:
+                prompt_len = self.dataset.prompt_ids_lens[idx]
+                # 估计 response 长度（可以用字符数 / 4 来近似）
+                response_len = len(response) // 4 + 1
+                total_len = min(prompt_len + response_len, self.dataset.max_length)
+            else:
+                total_len = min(len(prompt) // 4 + 1, self.dataset.max_length)
+            
+            lengths.append(total_len)
+        return lengths
+    
+    def _create_batches(self) -> List[List[int]]:
+        """使用 First Fit Decreasing 算法创建 batch"""
+        import random
+        
+        # 获取所有样本索引
+        indices = list(range(len(self.sample_lengths)))
+        
+        if self.shuffle:
+            random.seed(self.seed + self.epoch)
+            random.shuffle(indices)
+        
+        # 按长度排序（降序），有助于更好地 packing
+        sorted_indices = sorted(indices, key=lambda i: self.sample_lengths[i], reverse=True)
+        
+        batches = []  # List of (batch_indices, total_tokens)
+        
+        for idx in sorted_indices:
+            length = self.sample_lengths[idx]
+            
+            # 尝试找到一个可以容纳当前样本的 batch
+            placed = False
+            for i, (batch_indices, total_tokens) in enumerate(batches):
+                if total_tokens + length <= self.max_tokens_per_gpu:
+                    batches[i] = (batch_indices + [idx], total_tokens + length)
+                    placed = True
+                    break
+            
+            if not placed:
+                # 创建新的 batch
+                batches.append(([idx], length))
+        
+        # 只返回 indices
+        all_batches = [batch_indices for batch_indices, _ in batches]
+        
+        # 分布式训练：每个 rank 只取自己的 batch
+        if self.num_replicas > 1:
+            # 确保每个 rank 的 batch 数量相同（向上取整）
+            num_batches = len(all_batches)
+            num_batches_per_rank = (num_batches + self.num_replicas - 1) // self.num_replicas
+            
+            # 填充 batch 使其可以均匀分配
+            while len(all_batches) < num_batches_per_rank * self.num_replicas:
+                all_batches.append(all_batches[len(all_batches) % num_batches])
+            
+            # 每个 rank 取自己的部分
+            all_batches = all_batches[self.rank::self.num_replicas]
+        
+        return all_batches
+    
+    def __iter__(self):
+        # 每个 epoch 重新创建 batches（如果 shuffle）
+        if self.shuffle:
+            self.batches = self._create_batches()
+        
+        for batch_indices in self.batches:
+            yield batch_indices
+    
+    def __len__(self):
+        return len(self.batches)
+    
+    def set_epoch(self, epoch: int):
+        """设置 epoch，用于 shuffle"""
+        self.epoch = epoch
+        if self.shuffle:
+            self.batches = self._create_batches()
