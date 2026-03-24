@@ -192,11 +192,11 @@ class ActorPPOTrainer(ABC):
 
                 short_status = {
                     "act_loss": status["policy_loss"],
-                    "reward": status["reward"],
-                    "return": status["return"],
-                    "gen_len": status["response_length"],
-                    "tot_len": status["total_length"],
-                    "kl": status["kl"],
+                    "reward": status.get("reward", 0),
+                    "return": status.get("return", 0),
+                    "gen_len": status.get("response_length", 0),
+                    "tot_len": status.get("total_length", 0),
+                    "kl": status.get("kl", 0),
                     "act_lr": status["actor_lr"],
                 }
 
@@ -207,12 +207,23 @@ class ActorPPOTrainer(ABC):
                 pbar.set_postfix(short_status)
 
         if status_list:
-            status_mean = status_list[0]
-            for m in status_list[1:]:
-                for k, v in m.items():
-                    status_mean[k] += v
-            for k in status_mean.keys():
-                status_mean[k] /= len(status_list)
+            # Sample-weighted averaging across micro-batches to fix metric bias
+            # (micro-batches have different sizes with dynamic batching)
+            total_samples = sum(s["_num_samples"] for s in status_list)
+            all_keys = set().union(*(s.keys() for s in status_list))
+            status_mean = {}
+            for k in all_keys:
+                if k == "_num_samples":
+                    continue
+                if k == "actor_grad_norm":
+                    # grad_norm only present on optimizer-step micro-batches; take the last one
+                    grad_norms = [s[k] for s in status_list if k in s]
+                    status_mean[k] = grad_norms[-1] if grad_norms else 0.0
+                elif k == "actor_lr":
+                    status_mean[k] = status_list[-1][k]
+                else:
+                    # Sample-weighted average: sum(mean_i * n_i) / sum(n_i)
+                    status_mean[k] = sum(s.get(k, 0.0) * s["_num_samples"] for s in status_list) / total_samples
         return status_mean
 
     def training_step(self, experience: Experience, kl_ctl: float, step: int) -> Dict[str, float]:
@@ -299,10 +310,18 @@ class ActorPPOTrainer(ABC):
         status = {
             "policy_loss": actor_loss.detach().item(),
             "actor_lr": self.actor_scheduler.get_last_lr()[0],
-            "actor_grad_norm": self.strategy.get_grad_norm(self.actor),
         }
+
+        # Only report grad_norm when optimizer actually steps (otherwise it's 0.0 and dilutes the average)
+        is_optimizer_step = not self.args.use_dynamic_batch or self.replay_buffer.dynamic_optimizer_step[step]
+        if is_optimizer_step:
+            status["actor_grad_norm"] = self.strategy.get_grad_norm(self.actor)
+
         if self.args.entropy_loss_coef is not None:
             status["entropy_loss"] = entropy_loss.detach().item()
+
+        # Track sample count for proper weighted averaging across micro-batches
+        status["_num_samples"] = float(experience.action_mask.shape[0])
 
         # merge logs from info field
         for k, v in experience.info.items():

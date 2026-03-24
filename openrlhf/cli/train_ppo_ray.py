@@ -41,7 +41,7 @@ def train(args):
     # init vLLM engine for text generation
     vllm_engines = None
     if args.vllm_num_engines is not None and args.vllm_num_engines > 0:
-        max_len = args.max_len if args.max_len else args.prompt_max_len + args.generate_max_len
+        max_len = args.max_len
         if args.colocate_all_models and not args.async_train:
             assert (
                 args.actor_num_nodes * args.actor_num_gpus_per_node
@@ -146,9 +146,8 @@ def train(args):
         vllm_engines,
         # generate kwargs
         do_sample=True,
-        prompt_max_len=args.prompt_max_len,
-        max_new_tokens=args.generate_max_len,
-        max_length=args.max_len,
+        max_len=max_len,
+        max_new_tokens=args.max_new_tokens,
         temperature=args.temperature,
         top_p=args.top_p,
     )
@@ -344,9 +343,13 @@ if __name__ == "__main__":
     )
     parser.add_argument("--micro_rollout_batch_size", type=int, default=8)
     parser.add_argument("--max_epochs", type=int, default=1)
-    parser.add_argument("--prompt_max_len", type=int, default=1024, help="Max tokens for each prompt")
-    parser.add_argument("--generate_max_len", type=int, default=1024, help="Max tokens to generate in PPO")
-    parser.add_argument("--max_len", type=int, default=None, help="deprecated max_len")
+    parser.add_argument("--max_len", type=int, default=2048, help="Max total sequence length (prompt + response)")
+    parser.add_argument(
+        "--max_new_tokens",
+        type=int,
+        default=None,
+        help="Max tokens to generate per sample. If None, dynamically computed as max_len - prompt_len per sample.",
+    )
     parser.add_argument("--max_samples", type=int, default=1e8, help="Max number of samples")
     parser.add_argument("--max_norm", type=float, default=1.0, help="Gradient clipping")
     parser.add_argument("--l2", type=float, default=0.0, help="weight decay loss")

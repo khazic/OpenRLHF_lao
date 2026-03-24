@@ -164,17 +164,23 @@ class SingleTurnAgentExecutor(AgentExecutorBase):
         # Tokenize the initial observation.
         prompt_token_ids = hf_tokenizer(prompt, add_special_tokens=False, return_tensors="pt")["input_ids"][0].tolist()
 
+        # Compute dynamic max_tokens when not explicitly set (prompt + response share max_length budget)
+        effective_params = sampling_params
+        if sampling_params.max_tokens is None:
+            effective_params = deepcopy(sampling_params)
+            effective_params.max_tokens = max(1, max_length - len(prompt_token_ids))
+
         # Truncate prompt if it's too long to leave room for generation
-        max_prompt_length = max_length - sampling_params.max_tokens
+        max_prompt_length = max_length - effective_params.max_tokens
         if len(prompt_token_ids) > max_prompt_length:
             logger.warning(
                 f"Prompt length ({len(prompt_token_ids)}) exceeds max_prompt_length ({max_prompt_length}). "
-                f"Truncating to fit within max_length ({max_length}) with max_tokens ({sampling_params.max_tokens})."
+                f"Truncating to fit within max_length ({max_length}) with max_tokens ({effective_params.max_tokens})."
             )
             prompt_token_ids = prompt_token_ids[-max_prompt_length:]
 
         # Generate one continuation from the engine.
-        request_output = await llm_engine.generate(prompt_token_ids, deepcopy(sampling_params))
+        request_output = await llm_engine.generate(prompt_token_ids, deepcopy(effective_params))
         generation_output = request_output.outputs[0]
         action_token_ids = generation_output.token_ids
 

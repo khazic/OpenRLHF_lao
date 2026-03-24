@@ -15,30 +15,30 @@ logger = init_logger(__name__)
 
 def apply_overlong_penalty(
     experiences: List,
-    generate_max_len: int,
+    max_new_tokens: int,
     overlong_buffer_len: float,
     overlong_penalty_factor: float = 1.0,
 ) -> int:
     """
     DAPO-style overlong penalty based on response length.
 
-    Penalizes responses that exceed (generate_max_len - overlong_buffer_len).
+    Penalizes responses that exceed (max_new_tokens - overlong_buffer_len).
     Formula: penalty = -min(exceed_len, buffer_len) / buffer_len * penalty_factor
 
     Args:
         experiences: List of Experience objects with rewards and info
-        generate_max_len: Maximum generation length
-        overlong_buffer_len: Buffer length before max_len
+        max_new_tokens: Maximum generation length
+        overlong_buffer_len: Buffer length before max_new_tokens
         overlong_penalty_factor: Maximum penalty factor
 
     Returns:
         Number of samples that received penalty
     """
     assert (
-        generate_max_len >= overlong_buffer_len
-    ), f"generate_max_len ({generate_max_len}) must be >= overlong_buffer_len ({overlong_buffer_len})"
+        max_new_tokens >= overlong_buffer_len
+    ), f"max_new_tokens ({max_new_tokens}) must be >= overlong_buffer_len ({overlong_buffer_len})"
 
-    expected_len = generate_max_len - overlong_buffer_len
+    expected_len = max_new_tokens - overlong_buffer_len
     total_penalized = 0
 
     for experience in experiences:
@@ -124,15 +124,16 @@ def apply_length_penalties(experiences: List, args) -> None:
 
     # DAPO-style overlong penalty based on response length
     if getattr(args, "overlong_buffer_len", None) is not None:
+        max_new_tokens = getattr(args, "max_new_tokens", None) or args.max_len
         num_penalized = apply_overlong_penalty(
             experiences=experiences,
-            generate_max_len=args.generate_max_len,
+            max_new_tokens=max_new_tokens,
             overlong_buffer_len=args.overlong_buffer_len,
             overlong_penalty_factor=getattr(args, "overlong_penalty_factor", 1.0),
         )
         logger.info(
             f"[DAPO Overlong Penalty] {num_penalized}/{total_samples} samples penalized, "
-            f"buffer_len={args.overlong_buffer_len}, factor={args.overlong_penalty_factor}"
+            f"buffer_len={args.overlong_buffer_len}, factor={getattr(args, 'overlong_penalty_factor', 1.0)}"
         )
 
     # ProRL-style stop properly penalty based on finish_reason
@@ -145,3 +146,8 @@ def apply_length_penalties(experiences: List, args) -> None:
             f"[ProRL Stop Properly Penalty] {num_truncated}/{total_samples} samples truncated, "
             f"coef={args.stop_properly_penalty_coef}"
         )
+
+    # Sync info["reward"] with the modified rewards so logged metrics reflect penalties
+    for experience in experiences:
+        if "reward" in experience.info:
+            experience.info["reward"] = experience.rewards.clone()

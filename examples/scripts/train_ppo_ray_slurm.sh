@@ -77,8 +77,7 @@ srun --overlap --nodes=1 --ntasks=1 -w "$node_1" --container-image="$IMAGE_NAME"
     --rollout_batch_size 1024 \
     --max_samples 100000 \
     --max_epochs 1 \
-    --prompt_max_len 1024 \
-    --generate_max_len 1024 \
+    --max_len 2048 \
     --zero_stage 3 \
     --param_dtype bf16 \
     --actor_learning_rate 5e-7 \

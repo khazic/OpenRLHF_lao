@@ -189,6 +189,9 @@ class BasePPOTrainer(ABC):
         ]
         print(sample0)
 
+        # Compute ground-truth rollout stats BEFORE dynamic batch splitting
+        rollout_stats = self._compute_rollout_stats(experiences)
+
         # Balance experiences across DP ranks if needed.
         if self.args.use_dynamic_batch:
             experiences = balance_experiences(experiences, self.args)
@@ -219,6 +222,9 @@ class BasePPOTrainer(ABC):
         status["timing/make_experience"] = make_experience_time
         status["timing/ppo_train"] = ppo_train_time
         status["timing/broadcast"] = broadcast_time
+
+        # Merge rollout stats (ground-truth, pre-dynamic-batch)
+        status.update(rollout_stats)
 
         status["generated_samples"] = sample0
         return status, global_step + 1
@@ -297,6 +303,23 @@ class BasePPOTrainer(ABC):
             if self.critic_model_group is not None:
                 refs.extend(self.critic_model_group.async_run_method(method_name="save_checkpoint", tag=tag))
             ray.get(refs)
+
+    def _compute_rollout_stats(self, experiences) -> Dict:
+        """Compute ground-truth rollout statistics before dynamic batch splitting."""
+        all_rewards = torch.cat([exp.info["reward"] for exp in experiences if "reward" in exp.info])
+        all_response_lengths = torch.cat(
+            [exp.info["response_length"] for exp in experiences if "response_length" in exp.info]
+        )
+        all_truncated = torch.cat([exp.info["truncated"] for exp in experiences if "truncated" in exp.info])
+
+        stats = {
+            "rollout/reward_mean": all_rewards.float().mean().item(),
+            "rollout/reward_std": all_rewards.float().std().item() if len(all_rewards) > 1 else 0.0,
+            "rollout/response_length_mean": all_response_lengths.float().mean().item(),
+            "rollout/truncated_rate": all_truncated.float().mean().item(),
+            "rollout/num_samples": float(len(all_rewards)),
+        }
+        return stats
 
     def init_checkpoint_states(self) -> Dict:
         ckpt_path = os.path.join(self.args.ckpt_path, "_actor")

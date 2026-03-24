@@ -363,12 +363,12 @@ class SamplesGenerator:
             temperature=generate_kwargs.get("temperature", 1.0),
             top_p=generate_kwargs.get("top_p", 1.0),
             top_k=generate_kwargs.get("top_k", -1),
-            max_tokens=generate_kwargs.get("max_new_tokens", 1024),
+            max_tokens=generate_kwargs.get("max_new_tokens"),  # None = dynamic per-prompt
             min_tokens=generate_kwargs.get("min_new_tokens", 1),
             skip_special_tokens=generate_kwargs.get("skip_special_tokens", False),
             logprobs=1 if self.args.enable_vllm_is_correction else None,
         )
-        truncate_length = generate_kwargs.get("prompt_max_len", 1024) + generate_kwargs.get("max_new_tokens", 1024)
+        truncate_length = generate_kwargs.get("max_len", 2048)
         n_samples = generate_kwargs.get("n_samples_per_prompt", self.args.n_samples_per_prompt)
 
         # Snapshot current pending rollout counts to balance upcoming work.
@@ -401,7 +401,7 @@ class SamplesGenerator:
 
     def _process_response_into_experience(self, response, **generate_kwargs) -> Experience:
         """Turn a single vLLM response into an Experience."""
-        truncate_length = generate_kwargs.get("prompt_max_len", 1024) + generate_kwargs.get("max_new_tokens", 1024)
+        truncate_length = generate_kwargs.get("max_len", 2048)
 
         # Base rollout fields from the output.
         tokenized_observation = response["observation_tokens"].copy()
