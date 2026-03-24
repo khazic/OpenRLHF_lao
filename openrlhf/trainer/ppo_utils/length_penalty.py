@@ -65,19 +65,25 @@ def apply_stop_properly_penalty(
     """
     ProRL-style stop properly penalty based on vLLM finish_reason.
 
-    Penalizes samples that were truncated (finish_reason == "length") by
-    scaling their rewards with the penalty coefficient.
+    Penalizes samples that were truncated (finish_reason == "length").
+
+    When stop_properly_penalty_coef >= 0: scale truncated rewards by this coefficient.
+    When stop_properly_penalty_coef < 0: set truncated rewards to this value directly
+        (e.g., -0.5 gives truncated samples a fixed negative reward).
 
     Args:
         experiences: List of Experience objects with rewards and info
-        stop_properly_penalty_coef: Coefficient [0, 1] to scale truncated sample rewards
+        stop_properly_penalty_coef: Coefficient to penalize truncated samples.
+            If >= 0: multiplicative scaling [0, 1].
+            If < 0: fixed reward override for truncated samples.
 
     Returns:
         Number of truncated samples
     """
-    assert (
-        0 <= stop_properly_penalty_coef <= 1
-    ), f"stop_properly_penalty_coef must be in [0, 1], got {stop_properly_penalty_coef}"
+    if stop_properly_penalty_coef >= 0:
+        assert (
+            0 <= stop_properly_penalty_coef <= 1
+        ), f"stop_properly_penalty_coef must be in [0, 1] or negative, got {stop_properly_penalty_coef}"
 
     total_truncated = 0
 
@@ -89,8 +95,12 @@ def apply_stop_properly_penalty(
         batch_size = len(truncated_flags)
         for j in range(batch_size):
             if truncated_flags[j].item():
-                # Scale truncated sample rewards by the penalty coefficient
-                experience.rewards[j] = experience.rewards[j] * stop_properly_penalty_coef
+                if stop_properly_penalty_coef < 0:
+                    # Fixed negative reward for truncated samples
+                    experience.rewards[j] = stop_properly_penalty_coef
+                else:
+                    # Scale truncated sample rewards by the penalty coefficient
+                    experience.rewards[j] = experience.rewards[j] * stop_properly_penalty_coef
                 total_truncated += 1
 
     return total_truncated

@@ -424,8 +424,8 @@ if __name__ == "__main__":
         "--stop_properly_penalty_coef",
         type=float,
         default=None,
-        help="Penalty coefficient [0,1] for truncated samples (finish_reason='length'). "
-        "Truncated sample rewards are scaled by this coefficient to encourage proper stopping.",
+        help="Penalty for truncated samples (finish_reason='length'). "
+        "If >= 0: multiplicative scaling [0,1]. If < 0: fixed reward override (e.g., -0.5).",
     )
 
     # Context Parallel
