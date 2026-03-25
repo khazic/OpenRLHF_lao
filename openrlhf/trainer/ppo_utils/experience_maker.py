@@ -1,7 +1,7 @@
 import heapq
 import time
 from copy import deepcopy
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from datetime import timedelta
 from typing import Any, List, Optional, Tuple, Union
 
@@ -21,6 +21,12 @@ from openrlhf.utils.utils import zero_pad_sequences
 logger = init_logger(__name__)
 
 
+def tensor_field(role: str, **kwargs):
+    metadata = dict(kwargs.pop("metadata", {}))
+    metadata["tensor_role"] = role
+    return field(metadata=metadata, **kwargs)
+
+
 def to(tensor: Union[torch.Tensor, list[torch.Tensor]], device):
     if isinstance(tensor, list):
         return [to(t, device) for t in tensor]
@@ -35,79 +41,54 @@ def pin_memory(tensor: Union[torch.Tensor, list[torch.Tensor]]):
 
 @dataclass
 class Experience:
-    """Experience is a batch of data for RLHF training.
+    """A batch of RL experience for policy optimization.
 
-    Shapes of each tensor:
-    index: (B,)
-    sequences: (B, S)
-    attention_mask: (B, S)
-    action_mask: (B, A)
-    action_log_probs: (B, S)
-    base_action_log_probs: (B, S)
-    values: (B, S)
-    returns: (B, S)
-    advantages: (B, S)
-    kl: (B, S)
-    info: dict[str, list]
+    Fields are grouped by RL semantics:
+    - Trajectory: token-level state-action sequences and masks (B, T)
+    - Policy: per-step log-probabilities under different policies (B, A)
+    - Value: per-step value estimates, returns, and advantages (B, A)
+    - Outcome: per-episode rewards and generation metadata (B,)
+    - Metadata: non-tensor fields for logging and data tracking
     """
 
+    # ── Trajectory: state-action sequences ──
+    sequences: torch.Tensor = tensor_field("step", default=None)  # (B, T) token ids [prompt + response]
+    attention_mask: torch.LongTensor = tensor_field("step", default=None)  # (B, T)
+    action_mask: torch.BoolTensor = tensor_field("step", default=None)  # (B, A) mask over action (response) tokens
+
+    # ── Policy: log π(a|s) under different policies ──
+    action_log_probs: torch.Tensor = tensor_field("step", default=None)  # (B, A) log π_θ(a|s)  current policy
+    base_action_log_probs: torch.Tensor = tensor_field("step", default=None)  # (B, A) log π_ref(a|s) reference policy
+    rollout_log_probs: torch.Tensor = tensor_field("step", default=None)  # (B, A) log π_old(a|s) rollout policy
+
+    # ── Value estimation ──
+    values: torch.Tensor = tensor_field("step", default=None)  # (B, A) V(s)
+    returns: torch.Tensor = tensor_field("step", default=None)  # (B, A) G_t
+    advantages: torch.Tensor = tensor_field("step", default=None)  # (B, A) Â(s,a)
+    kl: torch.Tensor = tensor_field("step", default=None)  # (B, A) D_KL(π_θ ‖ π_ref)
+
+    # ── Episode outcomes (per-sample scalars) ──
+    rewards: torch.Tensor = tensor_field("episode", default=None)  # (B,) R, used for advantage calculation
+    scores: torch.Tensor = tensor_field("episode", default=None)  # (B,) binary score for dynamic sampling
+    response_length: torch.Tensor = tensor_field("episode", default=None)  # (B,) number of generated tokens
+    truncated: torch.Tensor = tensor_field("episode", default=None)  # (B,) whether generation was truncated
+    total_length: torch.Tensor = tensor_field("episode", default=None)  # (B,) prompt + response length
+
+    # ── Metadata (not part of RL computation) ──
     index: list[int] = None
-    sequences: torch.Tensor = None
-    attention_mask: torch.LongTensor = None
-    action_mask: torch.BoolTensor = None
+    prompts: list[str] = field(default_factory=list)
+    labels: list[str] = field(default_factory=list)
+    info: dict = field(default_factory=dict)  # per-sample metrics for logging
 
-    action_log_probs: torch.Tensor = None
-    base_action_log_probs: torch.Tensor = None
-    rollout_log_probs: torch.Tensor = None
-    values: torch.Tensor = None
-    returns: torch.Tensor = None
-    advantages: torch.Tensor = None
-    kl: torch.Tensor = None
+    @classmethod
+    def is_step_tensor_field(cls, name: str) -> bool:
+        field_info = cls.__dataclass_fields__.get(name)
+        return field_info is not None and field_info.metadata.get("tensor_role") == "step"
 
-    prompts: list[str] = None
-    labels: list[str] = None
-    rewards: torch.Tensor = None  # used for advantage calculation
-    scores: torch.Tensor = None  # 0-1 reward used for dynamic sampling
-
-    # the info field is used to store additional information
-    # all the fields in the info will be logged to the tensorboard/wandb
-    info: dict[str, torch.Tensor] = None
-
-    def __init__(
-        self,
-        index=None,
-        sequences=None,
-        action_log_probs=None,
-        base_action_log_probs=None,
-        rollout_log_probs=None,
-        values=None,
-        returns=None,
-        advantages=None,
-        attention_mask=None,
-        action_mask=None,
-        kl=None,
-        prompts=None,
-        labels=None,
-        rewards=None,
-        scores=None,
-        info=None,
-    ):
-        self.index = index
-        self.sequences = sequences
-        self.action_log_probs = action_log_probs
-        self.base_action_log_probs = base_action_log_probs
-        self.rollout_log_probs = rollout_log_probs
-        self.values = values
-        self.returns = returns
-        self.advantages = advantages
-        self.attention_mask = attention_mask
-        self.action_mask = action_mask
-        self.kl = kl
-        self.prompts = prompts or []
-        self.labels = labels or []
-        self.rewards = rewards
-        self.scores = scores
-        self.info = info or []
+    @classmethod
+    def is_episode_tensor_field(cls, name: str) -> bool:
+        field_info = cls.__dataclass_fields__.get(name)
+        return field_info is not None and field_info.metadata.get("tensor_role") == "episode"
 
     @torch.no_grad()
     def to_device(self, device: torch.device):
@@ -437,10 +418,7 @@ class SamplesGenerator:
         is_truncated = response.get("truncated", False)
 
         info = {
-            "response_length": torch.tensor([response_length]),
-            "total_length": torch.tensor([total_length]),
             "response_clip_ratio": torch.tensor([is_clipped]),
-            "truncated": torch.tensor([is_truncated]),
         }
         if reward_val is not None:
             info["reward"] = torch.tensor([reward_val])
@@ -463,6 +441,9 @@ class SamplesGenerator:
             labels=[response["label"]],
             rewards=torch.tensor([reward_val]) if reward_val is not None else None,
             scores=torch.tensor([score_val]) if score_val is not None else None,
+            response_length=torch.tensor([response_length]),
+            truncated=torch.tensor([is_truncated]),
+            total_length=torch.tensor([total_length]),
             info=info,
         )
 
@@ -498,7 +479,7 @@ class RemoteExperienceMaker:
 
         samples_list = []
         if self.args.use_dynamic_batch:
-            total_lengths = [int(s.info["total_length"].item()) for s in rollout_samples]
+            total_lengths = [int(s.total_length.item()) for s in rollout_samples]
             effective_actor_num = (
                 self.args.actor_num_nodes
                 * self.args.actor_num_gpus_per_node

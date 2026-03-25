@@ -2,6 +2,7 @@ import math
 import os
 import socket
 from abc import ABC
+from dataclasses import fields
 from typing import Dict, List, Optional, Union
 
 import deepspeed
@@ -31,6 +32,7 @@ from .utils import get_physical_gpu_id
 
 
 class ActorPPOTrainer(ABC):
+
     def __init__(
         self,
         strategy,
@@ -182,48 +184,68 @@ class ActorPPOTrainer(ABC):
 
                 experience.to_device(device)
                 status = self.training_step(experience, kl_ctl, step)
-                status["kl"] *= status["response_length"]
-                if "logprobs_diff" in status:
-                    status["logprobs_diff"] *= status["response_length"]
-                status = self.strategy.all_reduce(status)
-                status["kl"] /= status["response_length"]
-                if "logprobs_diff" in status:
-                    status["logprobs_diff"] /= status["response_length"]
+
+                metrics = status["metrics"]
+                weights = status["weights"]
+                n_tokens = status["num_action_tokens"]
+                n_samples = status["num_samples"]
+
+                reduced_status = {"_num_action_tokens": n_tokens, "_num_samples": n_samples}
+                last_metrics = {}
+                for k, value in metrics.items():
+                    weight = weights[k]
+                    if weight is None:
+                        last_metrics[k] = value
+                        continue
+                    scale = n_tokens if weight == "token" else n_samples
+                    reduced_status[k] = (
+                        value.float().mean().item() * scale if isinstance(value, torch.Tensor) else value * scale
+                    )
+
+                reduced_status = self.strategy.all_reduce(reduced_status)
+
+                n_tokens = reduced_status.pop("_num_action_tokens")
+                n_samples = reduced_status.pop("_num_samples")
+                merged_status = {}
+                for k, value in reduced_status.items():
+                    denom = n_tokens if weights[k] == "token" else n_samples
+                    merged_status[k] = value / denom
+
+                merged_status.update(last_metrics)
+                merged_status["_num_samples"] = n_samples
+                merged_status["_num_action_tokens"] = n_tokens
+                merged_status["_weights"] = weights
+                actor_lr = merged_status.get("actor_lr", 0)
 
                 short_status = {
-                    "act_loss": status["policy_loss"],
-                    "reward": status.get("reward", 0),
-                    "return": status.get("return", 0),
-                    "gen_len": status.get("response_length", 0),
-                    "tot_len": status.get("total_length", 0),
-                    "kl": status.get("kl", 0),
-                    "act_lr": status["actor_lr"],
+                    "act_loss": merged_status["policy_loss"],
+                    "reward": merged_status.get("reward", 0),
+                    "return": merged_status.get("return", 0),
+                    "gen_len": merged_status.get("response_length", 0),
+                    "tot_len": merged_status.get("total_length", 0),
+                    "kl": merged_status.get("kl", 0),
+                    "act_lr": actor_lr,
                 }
+                if "entropy_loss" in merged_status:
+                    short_status["ent_loss"] = merged_status["entropy_loss"]
 
-                if "entropy_loss" in status:
-                    short_status["ent_loss"] = status["entropy_loss"]
-
-                status_list.append(status)
+                status_list.append(merged_status)
                 pbar.set_postfix(short_status)
 
         if status_list:
-            # Sample-weighted averaging across micro-batches to fix metric bias
-            # (micro-batches have different sizes with dynamic batching)
+            total_tokens = sum(s["_num_action_tokens"] for s in status_list)
             total_samples = sum(s["_num_samples"] for s in status_list)
-            all_keys = set().union(*(s.keys() for s in status_list))
             status_mean = {}
-            for k in all_keys:
-                if k == "_num_samples":
+            for k in set().union(*(s.keys() for s in status_list)):
+                if k in ("_num_samples", "_num_action_tokens", "_weights"):
                     continue
-                if k == "actor_grad_norm":
-                    # grad_norm only present on optimizer-step micro-batches; take the last one
-                    grad_norms = [s[k] for s in status_list if k in s]
-                    status_mean[k] = grad_norms[-1] if grad_norms else 0.0
-                elif k == "actor_lr":
-                    status_mean[k] = status_list[-1][k]
+                if k in ("actor_grad_norm", "actor_lr"):
+                    vals = [s[k] for s in status_list if k in s]
+                    status_mean[k] = vals[-1] if vals else 0.0
+                elif status_list[0].get("_weights", {}).get(k) == "token":
+                    status_mean[k] = sum(s.get(k, 0) * s["_num_action_tokens"] for s in status_list) / total_tokens
                 else:
-                    # Sample-weighted average: sum(mean_i * n_i) / sum(n_i)
-                    status_mean[k] = sum(s.get(k, 0.0) * s["_num_samples"] for s in status_list) / total_samples
+                    status_mean[k] = sum(s.get(k, 0) * s["_num_samples"] for s in status_list) / total_samples
         return status_mean
 
     def training_step(self, experience: Experience, kl_ctl: float, step: int) -> Dict[str, float]:
@@ -306,30 +328,45 @@ class ActorPPOTrainer(ABC):
             else:
                 self.strategy.moving_average(self.actor, self.ema_model, self.ema_beta, "cuda")
 
-        # status
-        status = {
-            "policy_loss": actor_loss.detach().item(),
-            "actor_lr": self.actor_scheduler.get_last_lr()[0],
-        }
+        # Per-token losses (0-D tensors, shape carries weighting info for ppo_train)
+        metrics = {"policy_loss": actor_loss.detach()}
+        weights = {"policy_loss": "token"}
+        if self.args.entropy_loss_coef is not None:
+            metrics["entropy_loss"] = entropy_loss.detach()
+            weights["entropy_loss"] = "token"
 
-        # Only report grad_norm when optimizer actually steps (otherwise it's 0.0 and dilutes the average)
+        # Non-reducible meta
+        metrics["actor_lr"] = self.actor_scheduler.get_last_lr()[0]
+        weights["actor_lr"] = None
         is_optimizer_step = not self.args.use_dynamic_batch or self.replay_buffer.dynamic_optimizer_step[step]
         if is_optimizer_step:
-            status["actor_grad_norm"] = self.strategy.get_grad_norm(self.actor)
+            metrics["actor_grad_norm"] = self.strategy.get_grad_norm(self.actor)
+            weights["actor_grad_norm"] = None
 
-        if self.args.entropy_loss_coef is not None:
-            status["entropy_loss"] = entropy_loss.detach().item()
-
-        # Track sample count for proper weighted averaging across micro-batches
-        status["_num_samples"] = float(experience.action_mask.shape[0])
-
-        # merge logs from info field
+        # Merge all loggable tensors.
+        # `info` keeps algorithm metrics; episode tensor fields are added explicitly below.
         for k, v in experience.info.items():
-            if isinstance(v, list):
-                status[k] = torch.tensor(v, dtype=torch.float).mean().item()
-            elif isinstance(v, torch.Tensor):
-                status[k] = v.float().mean().item()
-        return status
+            if isinstance(v, torch.Tensor):
+                metrics[k] = v
+                weights[k] = "token" if v.dim() == 0 else "sample"
+            elif isinstance(v, list):
+                metrics[k] = torch.tensor(v, dtype=torch.float)
+                weights[k] = "sample"
+
+        for f in fields(Experience):
+            if f.name in {"rewards", "scores"} or not Experience.is_episode_tensor_field(f.name):
+                continue
+            value = getattr(experience, f.name)
+            if isinstance(value, torch.Tensor) and f.name not in metrics:
+                metrics[f.name] = value
+                weights[f.name] = "sample"
+
+        return {
+            "metrics": metrics,
+            "weights": weights,
+            "num_samples": float(experience.action_mask.shape[0]),
+            "num_action_tokens": float(experience.action_mask.sum().item()),
+        }
 
     def broadcast_to_vllm(self):
         use_prefix_cache = getattr(self.strategy.args, "enable_prefix_caching", False)

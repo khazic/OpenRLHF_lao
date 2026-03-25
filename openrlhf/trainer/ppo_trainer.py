@@ -84,9 +84,8 @@ def compute_eval_metrics(eval_dataloader, samples_list, n_samples_per_prompt):
     for s in samples_list:
         all_prompts.extend(s.prompts)
         all_rewards.append(s.rewards)
-        info = s.info if isinstance(s.info, dict) else {}
-        all_response_lengths.append(info["response_length"].item() if "response_length" in info else None)
-        all_truncated.append(info["truncated"].item() if "truncated" in info else None)
+        all_response_lengths.append(s.response_length.item() if s.response_length is not None else None)
+        all_truncated.append(s.truncated.item() if s.truncated is not None else None)
 
     rewards = torch.tensor(all_rewards).reshape(-1, n_samples_per_prompt)
 
@@ -308,9 +307,9 @@ class BasePPOTrainer(ABC):
         """Compute ground-truth rollout statistics before dynamic batch splitting."""
         all_rewards = torch.cat([exp.info["reward"] for exp in experiences if "reward" in exp.info])
         all_response_lengths = torch.cat(
-            [exp.info["response_length"] for exp in experiences if "response_length" in exp.info]
+            [exp.response_length for exp in experiences if exp.response_length is not None]
         )
-        all_truncated = torch.cat([exp.info["truncated"] for exp in experiences if "truncated" in exp.info])
+        all_truncated = torch.cat([exp.truncated for exp in experiences if exp.truncated is not None])
 
         stats = {
             "rollout/reward_mean": all_rewards.float().mean().item(),

@@ -42,7 +42,7 @@ def apply_overlong_penalty(
     total_penalized = 0
 
     for experience in experiences:
-        response_lengths = experience.info["response_length"]
+        response_lengths = experience.response_length
         batch_size = len(response_lengths)
 
         for j in range(batch_size):
@@ -88,7 +88,7 @@ def apply_stop_properly_penalty(
     total_truncated = 0
 
     for experience in experiences:
-        truncated_flags = experience.info.get("truncated", None)
+        truncated_flags = experience.truncated
         if truncated_flags is None:
             continue
 
