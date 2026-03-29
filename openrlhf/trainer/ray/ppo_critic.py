@@ -220,8 +220,8 @@ class CriticModelActor(BaseModelActor):
         )
 
         # load checkpoint
-        if args.load_checkpoint and os.path.exists(os.path.join(args.ckpt_path, "_actor")):
-            ckpt_path = os.path.join(args.ckpt_path, "_critic")
+        ckpt_path = os.path.join(args.ckpt_path, "_critic")
+        if args.load_checkpoint and os.path.exists(ckpt_path):
             strategy.print(f"Loading the checkpoint: {ckpt_path}")
             strategy.load_ckpt(self.critic, ckpt_path)
 
@@ -284,11 +284,17 @@ class CriticModelActor(BaseModelActor):
             args.save_path + "_critic",
         )
 
-    def save_checkpoint(self, tag):
+    def save_checkpoint(self, tag, metric_value=None, metric_key=None):
         args = self.strategy.args
         if not self.disable_ds_ckpt:
             self.strategy.save_ckpt(
-                self.critic, os.path.join(args.ckpt_path, "_critic"), tag, args.max_ckpt_num, args.max_ckpt_mem
+                self.critic,
+                os.path.join(args.ckpt_path, "_critic"),
+                tag,
+                args.max_ckpt_num,
+                args.max_ckpt_mem,
+                metric_value=metric_value,
+                metric_key=metric_key,
             )
 
     def reload_states(self):

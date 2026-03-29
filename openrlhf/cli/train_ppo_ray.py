@@ -276,8 +276,15 @@ if __name__ == "__main__":
     parser.add_argument("--save_hf_ckpt", action="store_true", default=False)
     parser.add_argument("--disable_ds_ckpt", action="store_true", default=False)
     parser.add_argument("--max_ckpt_num", type=int, default=3)
-    parser.add_argument("--max_ckpt_mem", type=int, default=1e8)
+    parser.add_argument("--max_ckpt_mem", type=float, default=float("inf"))
     parser.add_argument("--load_checkpoint", action="store_true", default=False)
+    parser.add_argument(
+        "--best_metric_key",
+        type=str,
+        default="",
+        help="Eval metric key for best checkpoint saving (e.g., eval_default_pass1). "
+        "Empty string auto-detects first pass1 metric. Set to 'none' to disable best checkpoint saving.",
+    )
     parser.add_argument(
         "--use_ds_universal_ckpt", action="store_true", help="Use deepspeed universal checkpoint", default=False
     )

@@ -197,6 +197,7 @@ class TrainingActor(BasePPOTrainer):
 
     def fit(self, global_step: int = 0) -> None:
         step_start_time = time.time()
+        self._latest_client_states = {}
         while True:
             payload = self.rollout_queue.get(block=True)
             if payload == "done":
@@ -211,6 +212,10 @@ class TrainingActor(BasePPOTrainer):
                     self.wandb_logger.log_eval(eval_step, eval_metrics)
                 if self.tensorboard_logger:
                     self.tensorboard_logger.log_eval(eval_step, eval_metrics)
+                # Save best checkpoint if this eval metric is the best so far
+                client_states = dict(self._latest_client_states)
+                client_states["global_step"] = global_step
+                self.save_best_checkpoint(eval_metrics, eval_step, client_states)
                 # Reset so the next training step's timing excludes eval overhead.
                 step_start_time = time.time()
                 continue
@@ -235,6 +240,7 @@ class TrainingActor(BasePPOTrainer):
             logger.info(f"Global step {global_step}: {log_status}")
 
             client_states.update({"global_step": global_step})
+            self._latest_client_states = client_states
             self.save_logs_and_checkpoints(global_step, status, client_states)
 
         if self.wandb_logger:
@@ -316,6 +322,7 @@ class PPOTrainerAsync:
 
     def fit(self) -> None:
         checkpoint_states = ray.get(self.trainer_actor.init_checkpoint_states.remote())
+        ray.get(self.trainer_actor.restore_best_checkpoint_state.remote(checkpoint_states))
 
         # Restore step and epoch
         start_episode = checkpoint_states["episode"]

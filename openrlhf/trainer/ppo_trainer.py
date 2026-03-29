@@ -171,6 +171,24 @@ class BasePPOTrainer(ABC):
         self.wandb_logger = WandbLogger(self.args) if self.args.use_wandb else None
         self.tensorboard_logger = TensorboardLogger(self.args) if self.args.use_tensorboard else None
 
+        # Best eval metric tracking
+        self.best_eval_metric_value = float("-inf")
+        self.best_eval_metric_key = getattr(self.args, "best_metric_key", "") or ""
+        self._latest_eval_metric_value = None
+
+    def restore_best_checkpoint_state(self, checkpoint_states) -> None:
+        if not checkpoint_states:
+            return
+
+        checkpoint_metric_key = checkpoint_states.get("best_eval_metric_key")
+        checkpoint_metric_value = checkpoint_states.get("best_eval_metric_value")
+
+        if checkpoint_metric_key:
+            self.best_eval_metric_key = checkpoint_metric_key
+        if checkpoint_metric_value is not None:
+            self.best_eval_metric_value = checkpoint_metric_value
+            self._latest_eval_metric_value = checkpoint_metric_value
+
     def fit(self, global_step: int = 0) -> None:
         raise NotImplementedError("fit method is not implemented")
 
@@ -283,6 +301,68 @@ class BasePPOTrainer(ABC):
         # NOTE: We keep vLLM in weights-only state after weight sync.
         # KV cache will be woken up before generation in SamplesGenerator.
 
+    def _detect_eval_metric_key(self, eval_metrics):
+        """Auto-detect the eval metric key to track for best checkpoint.
+
+        Returns None if best_metric_key is 'none' (disabled) or no suitable metric found.
+        """
+        if self.best_eval_metric_key == "none":
+            return None  # Explicitly disabled
+        if self.best_eval_metric_key:
+            return self.best_eval_metric_key if self.best_eval_metric_key in eval_metrics else None
+        # Auto-detect: prefer eval_*_pass1 metric
+        for key in sorted(eval_metrics):
+            if key.endswith("_pass1"):
+                self.best_eval_metric_key = key
+                return key
+        return None
+
+    def save_best_checkpoint(self, eval_metrics, global_step, client_states=None):
+        """Save checkpoint if eval metric is the best so far.
+
+        When best_metric_key is 'none' or auto-detection fails, this is a no-op
+        (regular save_steps checkpoints still save the most recent).
+        """
+        if not eval_metrics:
+            return
+
+        metric_key = self._detect_eval_metric_key(eval_metrics)
+        if metric_key is None or metric_key not in eval_metrics:
+            return
+
+        current_value = eval_metrics[metric_key]
+        self._latest_eval_metric_value = current_value
+        prev_best = self.best_eval_metric_value
+
+        if current_value > self.best_eval_metric_value:
+            self.best_eval_metric_value = current_value
+            logger.info(
+                f"New best eval metric: {metric_key}={current_value:.4f} at step {global_step} "
+                f"(previous best: {prev_best if prev_best > float('-inf') else 'N/A'})"
+            )
+
+            client_states = client_states or {}
+            client_states["best_eval_metric_key"] = metric_key
+            client_states["best_eval_metric_value"] = current_value
+            client_states["checkpoint_metric_key"] = metric_key
+
+            tag = f"best_global_step{global_step}"
+            refs = self.actor_model_group.async_run_method(
+                method_name="save_checkpoint",
+                tag=tag,
+                client_states=client_states,
+                metric_value=current_value,
+                metric_key=metric_key,
+            )
+            if self.critic_model_group is not None:
+                refs.extend(
+                    self.critic_model_group.async_run_method(
+                        method_name="save_checkpoint", tag=tag, metric_value=current_value, metric_key=metric_key
+                    )
+                )
+            ray.get(refs)
+            logger.info(f"Saved best checkpoint: {tag} ({metric_key}={current_value:.4f})")
+
     def save_logs_and_checkpoints(self, global_step: int, logs_dict=None, client_states=None) -> None:
         logs_dict = logs_dict or {}
         if global_step % self.args.logging_steps == 0:
@@ -292,15 +372,24 @@ class BasePPOTrainer(ABC):
                 self.tensorboard_logger.log_train(global_step, logs_dict)
 
         # save ckpt
-        # TODO: save best model on dev, use loss/perplexity/others on whole dev dataset as metric
         client_states = client_states or {}
         if global_step % self.args.save_steps == 0:
             tag = f"global_step{global_step}"
+            metric_value = self._latest_eval_metric_value
+            metric_key = client_states.get("checkpoint_metric_key") or self.best_eval_metric_key or None
             refs = self.actor_model_group.async_run_method(
-                method_name="save_checkpoint", tag=tag, client_states=client_states
+                method_name="save_checkpoint",
+                tag=tag,
+                client_states=client_states,
+                metric_value=metric_value,
+                metric_key=metric_key,
             )
             if self.critic_model_group is not None:
-                refs.extend(self.critic_model_group.async_run_method(method_name="save_checkpoint", tag=tag))
+                refs.extend(
+                    self.critic_model_group.async_run_method(
+                        method_name="save_checkpoint", tag=tag, metric_value=metric_value, metric_key=metric_key
+                    )
+                )
             ray.get(refs)
 
     def _compute_rollout_stats(self, experiences) -> Dict:
@@ -390,6 +479,7 @@ class PPOTrainer(BasePPOTrainer):
 
     def fit(self, global_step: int = 0) -> None:
         checkpoint_states = self.init_checkpoint_states()
+        self.restore_best_checkpoint_state(checkpoint_states)
         # Restore step and start_epoch
         start_episode = checkpoint_states["episode"]
         # Use checkpoint's global_step if resuming, otherwise use the parameter
@@ -444,12 +534,13 @@ class PPOTrainer(BasePPOTrainer):
                 }
                 self.save_logs_and_checkpoints(global_step, status, client_states)
 
-                # TODO: Add evaluation mechanism for PPO
+                # Evaluation and best checkpoint saving
                 if global_step % self.args.eval_steps == 0 and self.eval_dataloader:
                     eval_generate_kwargs = self.generate_kwargs.copy()
                     eval_generate_kwargs["temperature"] = self.args.eval_temperature
                     eval_generate_kwargs["n_samples_per_prompt"] = self.args.eval_n_samples_per_prompt
-                    self.evaluate(global_step, **eval_generate_kwargs)
+                    eval_logs = self.evaluate(global_step, **eval_generate_kwargs)
+                    self.save_best_checkpoint(eval_logs, global_step, client_states)
 
                 pbar.update(prompts_consumed)
 
@@ -477,3 +568,4 @@ class PPOTrainer(BasePPOTrainer):
         duration = end_time - start_time
         time_str = str(timedelta(seconds=duration)).split(".")[0]
         logger.info(f"✨ Evaluation completed in {time_str}, global_step {global_step}, eval_metrics: {logs}")
+        return logs

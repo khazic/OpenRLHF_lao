@@ -618,8 +618,9 @@ class PolicyModelActor(BaseModelActor):
     def offload_states(self):
         offload_deepspeed_states(self.actor.model)
 
-    def save_checkpoint(self, tag, client_states):
+    def save_checkpoint(self, tag, client_states=None, metric_value=None, metric_key=None):
         args = self.strategy.args
+        client_states = client_states or {}
         if not self.disable_ds_ckpt:
             self.strategy.save_ckpt(
                 self.actor.model,
@@ -628,6 +629,8 @@ class PolicyModelActor(BaseModelActor):
                 args.max_ckpt_num,
                 args.max_ckpt_mem,
                 client_states,
+                metric_value=metric_value,
+                metric_key=metric_key,
             )
         if self.save_hf_ckpt:
             save_path = os.path.join(args.ckpt_path, f"{tag}_hf")
