@@ -231,42 +231,21 @@ class RemoteExperienceMaker:
 
     @torch.no_grad()
     def compute_advantages_and_returns(self, experiences: List[Experience]) -> List[Experience]:
-        """Compute shaped rewards, advantages, and returns for a batch of experiences.
-
-        Pipeline:
-        1. Apply length penalties (DAPO / ProRL)
-        2. Reward shaping (RLOO / GRPO baseline subtraction)
-        3. Advantage calculation (GAE / REINFORCE) + optional normalization
-        """
+        """Compute shaped rewards, advantages, and returns for a batch of experiences."""
         args = self.strategy.args
 
-        # Step 1: Apply length penalties (DAPO overlong / ProRL stop properly)
+        # ── Length penalties (DAPO overlong / ProRL stop properly) ──
         apply_length_penalties(experiences, args)
 
-        # Step 2: Reward shaping
-        rewards = self._apply_reward_shaping(experiences, args)
-
-        # Step 3: Compute advantages and returns
-        self._compute_per_experience_advantages(experiences, rewards, args)
-
-        # Step 4: Normalize advantages across all experiences (for applicable estimators)
-        self._normalize_advantages(experiences, args)
-
-        return experiences
-
-    def _apply_reward_shaping(self, experiences: List[Experience], args) -> List[torch.Tensor]:
-        """Apply reward baselines (RLOO, GRPO, group_norm) and return per-experience reward tensors."""
+        # ── Reward shaping (baseline subtraction) ──
         exp_len = [len(experience.index) for experience in experiences]
-        # indices is an identity mapping when not using dynamic batch;
-        # otherwise, it maps back to the original indices after rearranging samples
         indices = torch.tensor(list(itertools.chain.from_iterable(experience.index for experience in experiences)))
         raw_rewards = torch.cat([experience.rewards for experience in experiences], dim=0)
         rewards = torch.empty_like(raw_rewards)
-        rewards[indices] = raw_rewards  # sorted
+        rewards[indices] = raw_rewards  # sorted by original prompt order
 
         rewards = rewards.reshape(-1, args.n_samples_per_prompt)
 
-        # Log group reward std
         if args.n_samples_per_prompt > 1:
             group_reward_stds = (
                 rewards.std(-1, keepdim=True).repeat(1, args.n_samples_per_prompt).reshape(-1)[indices].split(exp_len)
@@ -274,7 +253,6 @@ class RemoteExperienceMaker:
             for experience, group_reward_std in zip(experiences, group_reward_stds):
                 experience.info["group_reward_std"] = group_reward_std
 
-        # Baseline subtraction
         if args.advantage_estimator == "rloo":
             baseline = (rewards.sum(-1, keepdim=True) - rewards) / (args.n_samples_per_prompt - 1)
             rewards = rewards - baseline
@@ -283,12 +261,9 @@ class RemoteExperienceMaker:
         elif args.advantage_estimator == "group_norm":
             rewards = (rewards - rewards.mean(-1, keepdim=True)) / (rewards.std(-1, keepdim=True) + 1e-9)
 
-        return rewards.reshape(-1)[indices].split(exp_len)
+        rewards = rewards.reshape(-1)[indices].split(exp_len)
 
-    def _compute_per_experience_advantages(
-        self, experiences: List[Experience], rewards: List[torch.Tensor], args
-    ) -> None:
-        """Compute advantages and returns for each experience in-place."""
+        # ── Per-token advantages and returns ──
         for experience, reward in zip(experiences, rewards):
             reward = compute_reward(
                 reward,
@@ -325,36 +300,26 @@ class RemoteExperienceMaker:
             else:
                 raise Exception(f"Unkown advantage_estimator {self.advantage_estimator}")
 
-            # Calculate the return info
-            return_sums = reward.sum(dim=-1)
-            experience.info["return"] = return_sums
-            # Remove unnecessary info
+            experience.info["return"] = reward.sum(dim=-1)
             experience.kl = None
 
-    def _normalize_advantages(self, experiences: List[Experience], args) -> None:
-        """Normalize advantages across all experiences for applicable estimators."""
-        if args.advantage_estimator not in ["gae", "reinforce", "reinforce_baseline"]:
-            return
+        # ── Normalize advantages across all experiences ──
+        if args.advantage_estimator in ["gae", "reinforce", "reinforce_baseline"]:
+            all_advantages = torch.cat([exp.advantages.flatten() for exp in experiences], dim=0).float()
+            all_action_masks = torch.cat([exp.action_mask.flatten() for exp in experiences], dim=0)
+            num_actions = all_action_masks.sum()
 
-        all_advantages = []
-        all_action_masks = []
-        for exp in experiences:
-            all_advantages.append(exp.advantages.flatten())
-            all_action_masks.append(exp.action_mask.flatten())
+            mean = (all_advantages * all_action_masks).sum() / num_actions
+            if not args.no_advantage_std_norm:
+                var = ((all_advantages - mean).pow(2) * all_action_masks).sum() / num_actions
+                rstd = var.clamp(min=1e-8).rsqrt()
+            else:
+                rstd = 1
 
-        advantages_vector = torch.cat(all_advantages, dim=0).float()
-        action_masks_vector = torch.cat(all_action_masks, dim=0)
-        num_actions = action_masks_vector.sum()
+            for exp in experiences:
+                exp.advantages = (exp.advantages - mean) * rstd
 
-        mean = (advantages_vector * action_masks_vector).sum() / num_actions
-        if not args.no_advantage_std_norm:
-            var = ((advantages_vector - mean).pow(2) * action_masks_vector).sum() / num_actions
-            rstd = var.clamp(min=1e-8).rsqrt()
-        else:
-            rstd = 1
-
-        for exp in experiences:
-            exp.advantages = (exp.advantages - mean) * rstd
+        return experiences
 
     @torch.no_grad()
     def get_advantages_and_returns(
