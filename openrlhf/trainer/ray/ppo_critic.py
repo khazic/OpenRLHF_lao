@@ -12,7 +12,7 @@ from transformers.trainer import get_scheduler
 
 from openrlhf.models import ValueLoss, get_llm_for_sequence_regression
 from openrlhf.models.utils import masked_mean
-from openrlhf.trainer.ppo_utils.experience_maker import Experience
+from openrlhf.trainer.ppo_utils.experience import Experience
 from openrlhf.utils import get_tokenizer
 from openrlhf.utils.deepspeed import DeepspeedStrategy
 from openrlhf.utils.deepspeed.deepspeed_utils import offload_deepspeed_states, reload_deepspeed_states
@@ -65,15 +65,15 @@ class CriticPPOTrainer(ABC):
         if self.args.use_dynamic_batch:
             self.replay_buffer.setup_dynamic_batch(self.strategy)
 
-        not_shuffle = (
-            self.strategy.ring_attn_group is not None
-            or self.args.ds_tensor_parallel_size > 1
-            or self.args.use_dynamic_batch
+        should_shuffle = (
+            self.strategy.ring_attn_group is None
+            and self.args.ds_tensor_parallel_size <= 1
+            and not self.args.use_dynamic_batch
         )
         dataloader = DataLoader(
             self.replay_buffer,
             batch_size=self.replay_buffer.sample_batch_size,
-            shuffle=not not_shuffle,
+            shuffle=should_shuffle,
             drop_last=True,
             pin_memory=self.dataloader_pin_memory,
             collate_fn=self.replay_buffer.collate_fn,

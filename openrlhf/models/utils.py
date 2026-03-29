@@ -59,27 +59,24 @@ def compute_approx_kl(
         log_probs_base: Log probabilities of the base distribution.
     """
 
+    log_ratio = log_probs.float() - log_probs_base.float()
+
     if kl_estimator == "k1":
-        log_ratio = log_probs.float() - log_probs_base.float()
-
-    # The k2 estimator is the non negative kl approximation in
-    # http://joschu.net/blog/kl-approx.html
-    # The k2_loss is approximately equivalent to the
-    # one-step KL divergence penalty with the k1 estimator
-    # used in https://arxiv.org/pdf/2310.10505.
-    if kl_estimator == "k2":
-        log_ratio = log_probs.float() - log_probs_base.float()
+        pass  # log_ratio is already p - q
+    elif kl_estimator == "k2":
+        # Non-negative KL approximation: (p - q)^2 / 2
+        # http://joschu.net/blog/kl-approx.html
+        # Approximately equivalent to one-step KL penalty with k1
+        # used in https://arxiv.org/pdf/2310.10505.
         log_ratio = log_ratio**2 / 2.0
+    elif kl_estimator == "k3":
+        # Non-negative KL approximation: exp(q - p) - 1 - (q - p)
+        # http://joschu.net/blog/kl-approx.html
+        log_ratio = (-log_ratio).exp() - 1 + log_ratio
+    else:
+        raise ValueError(f"Unknown kl_estimator: {kl_estimator}")
 
-    # The k3 estimator is the non negative kl approximation in
-    # http://joschu.net/blog/kl-approx.html
-    if kl_estimator == "k3":
-        log_ratio = log_probs.float() - log_probs_base.float()
-        log_ratio = -log_ratio
-        log_ratio = log_ratio.exp() - 1 - log_ratio
-
-    log_ratio = log_ratio.clamp(min=-10, max=10)
-    return log_ratio
+    return log_ratio.clamp(min=-10, max=10)
 
 
 def compute_reward(

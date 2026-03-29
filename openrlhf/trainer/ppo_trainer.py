@@ -13,9 +13,10 @@ _TRANSFORMERS_V5 = int(transformers.__version__.split(".")[0]) >= 5
 
 from openrlhf.datasets import PromptDataset
 from openrlhf.datasets.utils import blending_datasets
-from openrlhf.trainer.ppo_utils.experience_maker import RemoteExperienceMaker, SamplesGenerator
+from openrlhf.trainer.ppo_utils.experience import balance_experiences
+from openrlhf.trainer.ppo_utils.experience_maker import RemoteExperienceMaker
 from openrlhf.trainer.ppo_utils.kl_controller import AdaptiveKLController, FixedKLController
-from openrlhf.trainer.ppo_utils.replay_buffer import balance_experiences
+from openrlhf.trainer.ppo_utils.samples_generator import SamplesGenerator
 from openrlhf.trainer.ray.launcher import RayActorGroup
 from openrlhf.trainer.ray.vllm_engine import batch_vllm_engine_call
 from openrlhf.utils.deepspeed import DeepspeedStrategy
@@ -204,7 +205,7 @@ class BasePPOTrainer(ABC):
             _decode(experiences[0].sequences[0].unsqueeze(0), skip_special_tokens=True)[0],
             experiences[0].info["reward"][0].item(),
         ]
-        print(sample0)
+        logger.info(f"Sample: {sample0}")
 
         # Compute ground-truth rollout stats BEFORE dynamic batch splitting
         rollout_stats = self._compute_rollout_stats(experiences)

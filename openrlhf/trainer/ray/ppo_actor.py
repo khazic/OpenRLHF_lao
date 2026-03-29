@@ -16,7 +16,7 @@ from transformers.trainer import get_scheduler
 
 from openrlhf.models import Actor, PolicyLoss
 from openrlhf.models.utils import compute_approx_kl, masked_mean
-from openrlhf.trainer.ppo_utils.experience_maker import Experience
+from openrlhf.trainer.ppo_utils.experience import Experience
 from openrlhf.utils import get_tokenizer
 from openrlhf.utils.deepspeed import DeepspeedStrategy
 from openrlhf.utils.deepspeed.deepspeed_utils import offload_deepspeed_states, reload_deepspeed_states
@@ -95,77 +95,72 @@ class ActorPPOTrainer(ABC):
 
         # Init torch group for weights sync
         backend = getattr(self.strategy.args, "vllm_sync_backend", "nccl")
-        self.use_cuda_ipc = False
-        if backend == "nccl" and self.args.colocate_all_models and not self.args.async_train:
-            self.use_cuda_ipc = True
+        self.use_cuda_ipc = backend == "nccl" and self.args.colocate_all_models and not self.args.async_train
 
-        # Create torch group with deepspeed rank 0 and all vllm ranks
-        # to update vllm engine's weights after each training stage.
-        #
-        # Say we have 3 vllm engines and each of them has 4 GPUs,
-        # then the torch group is:
-        # [    0,      1, 2, 3, 4,  5, 6, 7, 8,  9, 10, 11, 12]
-        # |ds rank 0 |  engine-0  |  engine-1  |   engine-2   |
-        #
-        # For ZeRO-1/2:
-        #   1. Broadcast parameters from rank 0 to all vllm engines
-        # For ZeRO-3:
-        #   1. AllGather paramters to rank 0
-        #   2. Broadcast parameters from rank 0 to all vllm engines
         if self.vllm_engines is not None and not self.use_cuda_ipc and torch.distributed.get_rank() == 0:
-            master_address = ray._private.services.get_node_ip_address()
-            with socket.socket() as sock:
-                sock.bind(("", 0))
-                master_port = sock.getsockname()[1]
-
-            vllm_num_engines, vllm_tensor_parallel_size = (
-                self.strategy.args.vllm_num_engines,
-                self.strategy.args.vllm_tensor_parallel_size,
-            )
-            world_size = vllm_num_engines * vllm_tensor_parallel_size + 1
-
-            use_ray = getattr(self.strategy.args, "vllm_sync_with_ray", False)
-            group_name = "openrlhf"
-            refs = [
-                engine.init_process_group.remote(
-                    master_address,
-                    master_port,
-                    i * vllm_tensor_parallel_size + 1,
-                    world_size,
-                    group_name,
-                    backend=backend,
-                    use_ray=use_ray,
-                )
-                for i, engine in enumerate(self.vllm_engines)
-            ]
-            if use_ray:
-                import ray.util.collective as collective
-
-                collective.init_collective_group(world_size=world_size, rank=0, backend=backend, group_name=group_name)
-                self._model_update_group = group_name
-            else:
-                self._model_update_group = stateless_init_process_group(
-                    master_address, master_port, 0, world_size, torch.cuda.current_device()
-                )
-
-            ray.get(refs)
+            self._init_vllm_sync_group(backend)
 
         torch_dist_barrier_and_cuda_sync()
+
+    def _init_vllm_sync_group(self, backend: str):
+        """Create a torch process group between DeepSpeed rank 0 and all vLLM engine ranks.
+
+        Layout example (3 engines, TP=4):
+            [    0,      1, 2, 3, 4,  5, 6, 7, 8,  9, 10, 11, 12]
+            |ds rank 0 |  engine-0  |  engine-1  |   engine-2   |
+
+        ZeRO-1/2: broadcast params from rank 0 to all engines.
+        ZeRO-3:   allgather to rank 0 first, then broadcast.
+        """
+        master_address = ray._private.services.get_node_ip_address()
+        with socket.socket() as sock:
+            sock.bind(("", 0))
+            master_port = sock.getsockname()[1]
+
+        vllm_num_engines = self.strategy.args.vllm_num_engines
+        vllm_tensor_parallel_size = self.strategy.args.vllm_tensor_parallel_size
+        world_size = vllm_num_engines * vllm_tensor_parallel_size + 1
+
+        use_ray = getattr(self.strategy.args, "vllm_sync_with_ray", False)
+        group_name = "openrlhf"
+        refs = [
+            engine.init_process_group.remote(
+                master_address,
+                master_port,
+                i * vllm_tensor_parallel_size + 1,
+                world_size,
+                group_name,
+                backend=backend,
+                use_ray=use_ray,
+            )
+            for i, engine in enumerate(self.vllm_engines)
+        ]
+        if use_ray:
+            import ray.util.collective as collective
+
+            collective.init_collective_group(world_size=world_size, rank=0, backend=backend, group_name=group_name)
+            self._model_update_group = group_name
+        else:
+            self._model_update_group = stateless_init_process_group(
+                master_address, master_port, 0, world_size, torch.cuda.current_device()
+            )
+
+        ray.get(refs)
 
     def ppo_train(self, kl_ctl: float):
         # replay buffer may be empty at first, we should rebuild at each training
         if self.args.use_dynamic_batch:
             self.replay_buffer.setup_dynamic_batch(self.strategy)
 
-        not_shuffle = (
-            self.strategy.ring_attn_group is not None
-            or self.args.ds_tensor_parallel_size > 1
-            or self.args.use_dynamic_batch
+        should_shuffle = (
+            self.strategy.ring_attn_group is None
+            and self.args.ds_tensor_parallel_size <= 1
+            and not self.args.use_dynamic_batch
         )
         dataloader = DataLoader(
             self.replay_buffer,
             batch_size=self.replay_buffer.sample_batch_size,
-            shuffle=not not_shuffle,
+            shuffle=should_shuffle,
             drop_last=True,
             pin_memory=self.dataloader_pin_memory,
             collate_fn=self.replay_buffer.collate_fn,
@@ -427,26 +422,18 @@ class ActorPPOTrainer(ABC):
                 ray.get(refs)
             torch_dist_barrier_and_cuda_sync()
 
+        def _gather_params_ctx(param):
+            """Context manager that gathers sharded/TP-split parameters for weight sync."""
+            if self.strategy.args.ds_tensor_parallel_size > 1:
+                return deepspeed.module_inject.layers.GatherReplacedLayerParams([param], model, enabled=True)
+            return deepspeed.zero.GatheredParameters([param], enabled=self.strategy.args.zero_stage == 3)
+
+        sync_fn = _handle_cuda_ipc if self.use_cuda_ipc else _broadcast_param
+
         for name, param in model.named_parameters():
             count += 1  # empty_cache at last param
-
-            # broadcast
-            if not self.use_cuda_ipc:
-                # For ZeRO-3, allgather sharded parameter and broadcast to all vllm engines by rank 0
-                if self.strategy.args.ds_tensor_parallel_size > 1:
-                    with deepspeed.module_inject.layers.GatherReplacedLayerParams([param], model, enabled=True):
-                        _broadcast_param(param, count, num_params)
-                else:
-                    with deepspeed.zero.GatheredParameters([param], enabled=self.strategy.args.zero_stage == 3):
-                        _broadcast_param(param, count, num_params)
-            # CUDA IPC
-            else:
-                if self.strategy.args.ds_tensor_parallel_size > 1:
-                    with deepspeed.module_inject.layers.GatherReplacedLayerParams([param], model, enabled=True):
-                        _handle_cuda_ipc(param, count, num_params)
-                else:
-                    with deepspeed.zero.GatheredParameters([param], enabled=self.strategy.args.zero_stage == 3):
-                        _handle_cuda_ipc(param, count, num_params)
+            with _gather_params_ctx(param):
+                sync_fn(param, count, num_params)
 
         if cache_reset_refs:
             ray.get(cache_reset_refs)
