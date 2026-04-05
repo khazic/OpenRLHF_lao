@@ -605,6 +605,12 @@ if __name__ == "__main__":
     if not args.vllm_generate_batch_size:
         args.vllm_generate_batch_size = args.rollout_batch_size
 
+    if args.vllm_generate_batch_size > args.rollout_batch_size:
+        assert args.async_train, (
+            "--vllm_generate_batch_size > --rollout_batch_size requires --async_train "
+            "(over-sampling needs async queue to buffer extra batches)."
+        )
+
     if args.dynamic_filtering:
         assert (
             args.dynamic_filtering_reward_range[0] < args.dynamic_filtering_reward_range[1]
